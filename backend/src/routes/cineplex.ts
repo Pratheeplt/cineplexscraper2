@@ -1,6 +1,11 @@
 import { Hono } from "hono";
 import { MovieSchema, TheatreSchema, type Movie, type Theatre } from "../types";
-import { cineplex, fetchBookableDates, fetchShowtimes } from "../lib/cineplex";
+import {
+  cineplex,
+  fetchBookableDates,
+  fetchShowtimes,
+  fetchTheatreFilmIds,
+} from "../lib/cineplex";
 
 const cineplexRouter = new Hono();
 
@@ -16,7 +21,12 @@ cineplexRouter.get("/", async (c) => {
     const raw = (await cineplex("movies?language=en")) as { items?: unknown[] };
     const items = Array.isArray(raw.items) ? raw.items : [];
 
-    const movies: Movie[] = items.map((item) => MovieSchema.parse(item));
+    const movies: Movie[] = items.map((item) => {
+      const m = MovieSchema.parse(item);
+      // A Coming Soon film with showtimes already loaded = advance tickets on sale.
+      m.hasAdvanceTickets = m.isComingSoon && m.hasShowtimes;
+      return m;
+    });
 
     let filtered = movies;
     if (filter === "now-playing") filtered = movies.filter((m) => m.isNowPlaying);
@@ -75,6 +85,29 @@ cineplexRouter.get("/theatres", async (c) => {
     theatres.sort((a, b) => a.theatreName.localeCompare(b.theatreName));
 
     return c.json({ data: theatres });
+  } catch (e) {
+    return c.json(upstreamError(e), 502);
+  }
+});
+
+// GET /api/cineplex/theatre-films?locationId=.. -> number[] of film IDs at that theatre
+cineplexRouter.get("/theatre-films", async (c) => {
+  const locationId = c.req.query("locationId");
+  if (!locationId || !/^\d+$/.test(locationId)) {
+    return c.json(
+      {
+        error: {
+          message: "locationId is required and must be numeric",
+          code: "INVALID_QUERY" as const,
+        },
+      },
+      400
+    );
+  }
+
+  try {
+    const filmIds = await fetchTheatreFilmIds(Number(locationId));
+    return c.json({ data: filmIds });
   } catch (e) {
     return c.json(upstreamError(e), 502);
   }

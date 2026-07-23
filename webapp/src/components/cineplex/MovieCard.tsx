@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Clock, Calendar, Film, ExternalLink, Bell } from "lucide-react";
+import { Clock, Calendar, Film, ExternalLink, Bell, Ticket } from "lucide-react";
 import type { Movie } from "../../../../backend/src/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,11 +12,20 @@ function releaseYear(date?: string | null): string | null {
   return Number.isNaN(year) ? null : String(year);
 }
 
+// Full readable release date, e.g. "Jul 31, 2026". Null if unparseable.
+function releaseDateLabel(date?: string | null): string | null {
+  if (!date) return null;
+  const d = new Date(date);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
 export function MovieCard({ movie }: { movie: Movie }) {
   const navigate = useNavigate();
   const [imgFailed, setImgFailed] = useState(false);
   const hasPoster = Boolean(movie.mediumPosterImageUrl) && !imgFailed;
   const year = releaseYear(movie.releaseDate);
+  const fullReleaseDate = releaseDateLabel(movie.releaseDate);
 
   const handleNotify = (e: React.MouseEvent) => {
     // Don't trigger the outer link to the Cineplex detail page.
@@ -57,12 +66,19 @@ export function MovieCard({ movie }: { movie: Movie }) {
           </div>
         )}
 
-        <div className="absolute left-2 top-2 flex flex-col gap-1">
+        <div className="absolute left-2 top-2 flex max-w-[calc(100%-1rem)] flex-col items-start gap-1">
           {movie.isNowPlaying ? (
             <Badge className="bg-primary text-primary-foreground shadow">Now Playing</Badge>
           ) : null}
           {movie.isComingSoon ? (
             <Badge className="bg-accent text-accent-foreground shadow">Coming Soon</Badge>
+          ) : null}
+          {/* Banner sits right underneath the Coming Soon badge. */}
+          {movie.hasAdvanceTickets ? (
+            <Badge className="gap-1 bg-emerald-500 text-white shadow">
+              <Ticket className="h-3 w-3" />
+              Advance tickets
+            </Badge>
           ) : null}
         </div>
 
@@ -87,7 +103,13 @@ export function MovieCard({ movie }: { movie: Movie }) {
               {movie.runtimeInMinutes} min
             </span>
           ) : null}
-          {year ? (
+          {/* Coming Soon films show the full release date; others just the year. */}
+          {movie.isComingSoon && fullReleaseDate ? (
+            <span className="inline-flex items-center gap-1 font-medium text-accent-foreground/90">
+              <Calendar className="h-3 w-3" />
+              {fullReleaseDate}
+            </span>
+          ) : year ? (
             <span className="inline-flex items-center gap-1">
               <Calendar className="h-3 w-3" />
               {year}

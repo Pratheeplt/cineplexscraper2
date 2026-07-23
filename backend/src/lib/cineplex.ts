@@ -19,6 +19,28 @@ export async function cineplex(path: string): Promise<unknown> {
   return res.json();
 }
 
+/**
+ * The set of film IDs that a theatre plays across ALL of its upcoming dates
+ * (now playing + advance-ticket coming soon). One call, no date param — the
+ * Cineplex showtimes endpoint returns every bookable date for the location.
+ * Used by the webapp to filter the movie list down to a selected theatre.
+ */
+export async function fetchTheatreFilmIds(locationId: number): Promise<number[]> {
+  const raw = (await cineplex(
+    `showtimes?language=en&locationId=${locationId}`
+  )) as RawTheatreShowtimes[];
+
+  const ids = new Set<number>();
+  for (const theatre of Array.isArray(raw) ? raw : []) {
+    for (const d of theatre.dates ?? []) {
+      for (const m of d.movies ?? []) {
+        if (typeof m.id === "number") ids.add(m.id);
+      }
+    }
+  }
+  return [...ids];
+}
+
 /** Bookable dates (YYYY-MM-DD) for a film at a theatre. */
 export async function fetchBookableDates(filmId: number, locationId: number): Promise<string[]> {
   const raw = (await cineplex(`dates/bookable?filmId=${filmId}&locationId=${locationId}`)) as unknown;

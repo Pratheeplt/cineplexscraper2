@@ -9,12 +9,17 @@ export const MovieSchema = z.object({
   mediumPosterImageUrl: z.string().nullable().optional(),
   largePosterImageUrl: z.string().nullable().optional(),
   genres: z.array(z.string()).default([]),
+  // The film's spoken language: "English", "Japanese", "Punjabi", "French", …
+  // Used to filter out international (non-English) films in the webapp.
   language: z.string().nullable().optional(),
   distributor: z.string().nullable().optional(),
   detailPageUrl: z.string().nullable().optional(),
   isNowPlaying: z.boolean().default(false),
   isComingSoon: z.boolean().default(false),
   hasShowtimes: z.boolean().default(false),
+  // Derived by the API: a Coming Soon film that already has bookable showtimes
+  // (i.e. advance tickets are on sale). Set in the /api/cineplex route.
+  hasAdvanceTickets: z.boolean().default(false),
 });
 export type Movie = z.infer<typeof MovieSchema>;
 
