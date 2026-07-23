@@ -1,8 +1,20 @@
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bell, Clock, Send, Link2, CheckCircle2, AlertCircle, Ticket, RefreshCw } from "lucide-react";
+import {
+  Bell,
+  Clock,
+  Send,
+  Link2,
+  CheckCircle2,
+  AlertCircle,
+  Ticket,
+  RefreshCw,
+  CalendarPlus,
+} from "lucide-react";
 import { notifyApi, INTERVAL_PRESETS, type NotifySettingsPatch } from "@/lib/notifyApi";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -50,6 +62,35 @@ export function NotifySettings() {
   });
 
   const connected = settings?.telegramConnected ?? false;
+
+  // Local form state for the manual Telegram credentials. The token field
+  // always starts empty (we never receive the raw token back); the chat id is
+  // pre-filled from the saved value.
+  const [botToken, setBotToken] = useState("");
+  const [chatId, setChatId] = useState(settings?.telegramChatId ?? "");
+  // Keep the chat id input in sync if settings load after first render.
+  const savedChatId = settings?.telegramChatId ?? "";
+  const [lastSavedChatId, setLastSavedChatId] = useState(savedChatId);
+  if (savedChatId !== lastSavedChatId) {
+    setLastSavedChatId(savedChatId);
+    setChatId(savedChatId);
+  }
+
+  const handleSaveTelegram = () => {
+    // Send both fields in ONE PATCH to dodge the dev-mode reload race.
+    const patch: NotifySettingsPatch = { telegramChatId: chatId.trim() };
+    const token = botToken.trim();
+    // Only include the token when the user typed one — an empty field must NOT
+    // overwrite the already-saved token.
+    if (token.length > 0) patch.telegramBotToken = token;
+
+    update.mutate(patch, {
+      onSuccess: () => {
+        setBotToken("");
+        toast({ title: "Telegram settings saved" });
+      },
+    });
+  };
 
   return (
     <div className="rounded-xl border border-border bg-card p-4 sm:p-5">
@@ -117,6 +158,27 @@ export function NotifySettings() {
           id="notify-advance"
           checked={settings?.notifyAdvanceTickets ?? false}
           onCheckedChange={(v) => update.mutate({ notifyAdvanceTickets: v })}
+        />
+      </div>
+
+      {/* New dates for favorite movies alert */}
+      <div className="mt-4 flex items-center justify-between rounded-lg border border-accent/30 bg-accent/5 px-3 py-2.5">
+        <div className="flex items-center gap-2">
+          <CalendarPlus className="h-4 w-4 text-accent" />
+          <div>
+            <Label htmlFor="notify-favorite-dates" className="text-sm font-medium">
+              New date alerts for favourite movies
+            </Label>
+            <p className="text-xs text-muted-foreground">
+              Get a Telegram message when new booking dates open for a movie you've favourited (at
+              your favourite theatres).
+            </p>
+          </div>
+        </div>
+        <Switch
+          id="notify-favorite-dates"
+          checked={settings?.notifyFavoriteDates ?? false}
+          onCheckedChange={(v) => update.mutate({ notifyFavoriteDates: v })}
         />
       </div>
 
@@ -228,6 +290,58 @@ export function NotifySettings() {
             , send <span className="font-mono text-foreground">/start</span>, then tap Connect.
           </p>
         ) : null}
+
+        {/* Manual credentials */}
+        <div className="mt-3 space-y-3 border-t border-border/60 pt-3">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="tg-bot-token" className="text-xs font-medium text-muted-foreground">
+                Bot token
+              </Label>
+              <Input
+                id="tg-bot-token"
+                type="password"
+                autoComplete="off"
+                value={botToken}
+                onChange={(e) => setBotToken(e.target.value)}
+                placeholder={
+                  settings?.hasBotToken
+                    ? "•••••••• (a token is already saved)"
+                    : "Paste your Telegram bot token"
+                }
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="tg-chat-id" className="text-xs font-medium text-muted-foreground">
+                Chat ID
+              </Label>
+              <Input
+                id="tg-chat-id"
+                type="text"
+                autoComplete="off"
+                value={chatId}
+                onChange={(e) => setChatId(e.target.value)}
+                placeholder="e.g. 123456789"
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs text-muted-foreground">
+              Paste a bot token &amp; chat ID manually, or send{" "}
+              <span className="font-mono text-foreground">/start</span> to the bot and tap Connect to
+              auto-detect your chat ID.
+            </p>
+            <Button
+              size="sm"
+              className="shrink-0"
+              disabled={update.isPending}
+              onClick={handleSaveTelegram}
+            >
+              Save
+            </Button>
+          </div>
+        </div>
       </div>
     </div>
   );

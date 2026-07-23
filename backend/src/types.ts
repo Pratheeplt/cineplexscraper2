@@ -101,6 +101,31 @@ export const HistoryEntrySchema = z.object({
 });
 export type HistoryEntry = z.infer<typeof HistoryEntrySchema>;
 
+// ---------------------------------------------------------------------------
+// Favorites — a set of favorite movies + favorite theatres. When a new bookable
+// date appears for a favorite movie at a favorite theatre, a Telegram alert is
+// sent (gated by settings.notifyFavoriteDates).
+// ---------------------------------------------------------------------------
+
+export const FavoriteMovieSchema = z.object({
+  filmId: z.number(),
+  filmName: z.string(),
+  posterUrl: z.string().nullable().optional(),
+});
+export type FavoriteMovie = z.infer<typeof FavoriteMovieSchema>;
+
+export const FavoriteTheatreSchema = z.object({
+  theatreId: z.number(),
+  theatreName: z.string(),
+});
+export type FavoriteTheatre = z.infer<typeof FavoriteTheatreSchema>;
+
+export const FavoritesSchema = z.object({
+  movies: z.array(FavoriteMovieSchema).default([]),
+  theatres: z.array(FavoriteTheatreSchema).default([]),
+});
+export type Favorites = z.infer<typeof FavoritesSchema>;
+
 export const SettingsSchema = z.object({
   enabled: z.boolean().default(true),
   intervalMinutes: z.number().default(30),
@@ -112,6 +137,9 @@ export const SettingsSchema = z.object({
   catalogIntervalMinutes: z.number().default(60),
   // When on, a Telegram alert is sent whenever advance tickets are released.
   notifyAdvanceTickets: z.boolean().default(false),
+  // When on, a Telegram alert is sent when a new bookable date appears for a
+  // favorite movie at a favorite theatre.
+  notifyFavoriteDates: z.boolean().default(false),
 });
 export type Settings = z.infer<typeof SettingsSchema>;
 
@@ -126,6 +154,7 @@ export const ACTIVITY_TYPES = [
   "advance_tickets", // a Coming Soon film now has advance tickets on sale
   "now_playing", // a film moved from Coming Soon to Now Playing
   "release_date", // a film's release date changed
+  "favorite_date", // a new bookable date appeared for a favorited movie
 ] as const;
 
 export const ActivityEventSchema = z.object({

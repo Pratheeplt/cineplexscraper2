@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Clock, Calendar, Film, ExternalLink, Bell, Ticket, MapPin } from "lucide-react";
+import { Clock, Calendar, Film, ExternalLink, Bell, Ticket, MapPin, Heart } from "lucide-react";
 import type { Movie } from "../../../../backend/src/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useFavoriteMovies } from "@/hooks/use-favorite-movies";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { PosterDatesOverlay } from "./PosterDatesOverlay";
@@ -29,12 +30,25 @@ export function MovieCard({
 }) {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
+  const { isFavorite, toggle } = useFavoriteMovies();
   const [imgFailed, setImgFailed] = useState(false);
   const [hovered, setHovered] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
 
   const hasPoster = Boolean(movie.mediumPosterImageUrl) && !imgFailed;
   const fullReleaseDate = releaseDateLabel(movie.releaseDate);
+  const favorited = isFavorite(movie.id);
+
+  const handleFavorite = (e: React.MouseEvent) => {
+    // Don't open the detail modal (or the Cineplex link) when favoriting.
+    e.preventDefault();
+    e.stopPropagation();
+    toggle({
+      filmId: movie.id,
+      filmName: movie.name,
+      posterUrl: movie.mediumPosterImageUrl ?? null,
+    });
+  };
 
   const handleNotify = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -100,6 +114,20 @@ export function MovieCard({
             ) : null}
           </div>
 
+          {/* Favorite (heart) toggle — always visible, top-right. */}
+          <button
+            type="button"
+            onClick={handleFavorite}
+            aria-label={favorited ? "Remove from favorites" : "Add to favorites"}
+            aria-pressed={favorited}
+            className={cn(
+              "absolute right-2 top-2 z-20 rounded-full bg-background/70 p-1.5 backdrop-blur transition-colors hover:bg-background",
+              favorited ? "text-primary" : "text-foreground"
+            )}
+          >
+            <Heart className={cn("h-3.5 w-3.5", favorited && "fill-current")} />
+          </button>
+
           {/* Real anchor button: opens Cineplex without triggering the modal. */}
           {movie.detailPageUrl ? (
             <a
@@ -108,7 +136,7 @@ export function MovieCard({
               rel="noopener noreferrer"
               onClick={handleExternal}
               aria-label="Open on Cineplex"
-              className="absolute right-2 top-2 z-20 rounded-full bg-background/70 p-1.5 opacity-0 backdrop-blur transition-opacity hover:bg-background group-hover:opacity-100"
+              className="absolute right-11 top-2 z-20 rounded-full bg-background/70 p-1.5 opacity-0 backdrop-blur transition-opacity hover:bg-background group-hover:opacity-100"
             >
               <ExternalLink className="h-3.5 w-3.5 text-foreground" />
             </a>

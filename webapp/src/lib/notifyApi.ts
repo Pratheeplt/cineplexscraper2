@@ -1,7 +1,14 @@
 import { api } from "@/lib/api";
-import type { Watch, HistoryEntry, ShowSession, ActivityEvent } from "../../../backend/src/types";
+import type {
+  Watch,
+  HistoryEntry,
+  ShowSession,
+  ActivityEvent,
+  FavoriteMovie,
+  FavoriteTheatre,
+} from "../../../backend/src/types";
 
-export type { Watch, HistoryEntry, ShowSession, ActivityEvent };
+export type { Watch, HistoryEntry, ShowSession, ActivityEvent, FavoriteMovie, FavoriteTheatre };
 
 export interface NotifySettings {
   enabled: boolean;
@@ -9,18 +16,33 @@ export interface NotifySettings {
   catalogEnabled: boolean;
   catalogIntervalMinutes: number;
   notifyAdvanceTickets: boolean;
+  notifyFavoriteDates: boolean;
   hasBotToken: boolean;
   telegramChatId: string;
   telegramConnected: boolean;
 }
 
-// The settings fields the UI is allowed to change.
+// The settings fields the UI is allowed to change. Includes the two Telegram
+// string secrets which are write-only from the client (never returned raw).
 export type NotifySettingsPatch = Partial<
   Pick<
     NotifySettings,
-    "enabled" | "intervalMinutes" | "catalogEnabled" | "catalogIntervalMinutes" | "notifyAdvanceTickets"
-  >
+    | "enabled"
+    | "intervalMinutes"
+    | "catalogEnabled"
+    | "catalogIntervalMinutes"
+    | "notifyAdvanceTickets"
+    | "notifyFavoriteDates"
+    | "telegramChatId"
+  > & {
+    telegramBotToken: string;
+  }
 >;
+
+export interface Favorites {
+  movies: FavoriteMovie[];
+  theatres: FavoriteTheatre[];
+}
 
 // Preset check intervals offered in the UI (kept in sync with the backend).
 export const INTERVAL_PRESETS = [
@@ -64,4 +86,10 @@ export const notifyApi = {
   connectTelegram: () =>
     api.post<{ telegramChatId: string; telegramConnected: boolean }>("/api/notify/telegram/connect"),
   testTelegram: () => api.post<{ sent: boolean }>("/api/notify/telegram/test"),
+
+  getFavorites: () => api.get<Favorites>("/api/notify/favorites"),
+  setFavoriteMovies: (movies: FavoriteMovie[]) =>
+    api.put<Favorites>("/api/notify/favorites/movies", { movies }),
+  setFavoriteTheatres: (theatres: FavoriteTheatre[]) =>
+    api.put<Favorites>("/api/notify/favorites/theatres", { theatres }),
 };

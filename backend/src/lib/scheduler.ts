@@ -1,6 +1,6 @@
 // Background scheduler: periodically checks each watch for NEW showtimes on its
 // target date and fires Telegram notifications the moment one appears.
-import type { HistoryEntry, ShowSession, Watch } from "../types";
+import type { ActivityEvent, HistoryEntry, ShowSession, Watch } from "../types";
 import { fetchBookableDates, fetchShowtimes } from "./cineplex";
 import {
   getSettings,
@@ -10,6 +10,10 @@ import {
   getSeen,
   setSeen,
   addHistory,
+  getFavorites,
+  getFavSeenDates,
+  setFavSeenDates,
+  addActivity,
 } from "./store";
 import { sendTelegram } from "./telegram";
 import { scanCatalog } from "./catalog";
@@ -127,6 +131,88 @@ export async function checkAllWatches(notify = true): Promise<number> {
   return totalNew;
 }
 
+/**
+ * Check every favorite movie × favorite theatre for NEW bookable dates.
+ * The first check per pair records a silent baseline (no alert) so that newly
+ * favorited items don't dump all their current dates as "new". Returns the total
+ * number of new dates detected. When `notify` is true, records an Activity event
+ * per new date and sends one summary Telegram message (if enabled + configured).
+ */
+export async function checkFavoriteDates(notify: boolean): Promise<number> {
+  const { movies, theatres } = getFavorites();
+  if (movies.length === 0 || theatres.length === 0) return 0;
+
+  let totalNew = 0;
+  // Grouped fresh dates for the Telegram summary: [movie+theatre header, dates]
+  const groups: { header: string; dates: string[] }[] = [];
+
+  for (const movie of movies) {
+    for (const theatre of theatres) {
+      const key = `${movie.filmId}_${theatre.theatreId}`;
+      let dates: string[];
+      try {
+        dates = await fetchBookableDates(movie.filmId, theatre.theatreId);
+      } catch (e) {
+        console.error(
+          `[favorites] bookable dates failed for ${movie.filmName} @ ${theatre.theatreName}:`,
+          (e as Error).message
+        );
+        continue;
+      }
+
+      const seen = getFavSeenDates(key);
+      if (seen === undefined) {
+        // Baseline for this pair — record silently, don't notify.
+        setFavSeenDates(key, dates);
+        continue;
+      }
+
+      const fresh = dates.filter((d) => !seen.includes(d));
+      setFavSeenDates(key, dates);
+      if (fresh.length === 0) continue;
+
+      totalNew += fresh.length;
+      groups.push({
+        header: `🎬 *${movie.filmName}* @ ${theatre.theatreName}`,
+        dates: fresh,
+      });
+
+      const now = new Date().toISOString();
+      const events: ActivityEvent[] = fresh.map((d) => ({
+        id: newId("f"),
+        type: "favorite_date" as const,
+        filmId: movie.filmId,
+        filmName: movie.filmName,
+        posterUrl: movie.posterUrl ?? null,
+        detail: `New date at ${theatre.theatreName}: ${fmtDate(d)}`,
+        detectedAt: now,
+      }));
+      addActivity(events);
+
+      console.log(
+        `[favorites] ${fresh.length} NEW date(s) for "${movie.filmName}" @ ${theatre.theatreName}`
+      );
+    }
+  }
+
+  if (notify && groups.length > 0) {
+    const { notifyFavoriteDates, telegramBotToken, telegramChatId } = getSettings();
+    if (notifyFavoriteDates && telegramBotToken && telegramChatId) {
+      try {
+        const body = groups
+          .map((g) => `${g.header}\n${g.dates.map((d) => `• ${fmtDate(d)}`).join("\n")}`)
+          .join("\n\n");
+        await sendTelegram(`📅 *New dates for your favourite movies:*\n\n${body}`);
+        console.log("[favorites] Telegram alert sent");
+      } catch (e) {
+        console.error("[favorites] Telegram send failed:", (e as Error).message);
+      }
+    }
+  }
+
+  return totalNew;
+}
+
 async function tick(): Promise<void> {
   if (running) {
     console.log("[scheduler] previous cycle still running, skipping tick");
@@ -137,6 +223,7 @@ async function tick(): Promise<void> {
   running = true;
   try {
     await checkAllWatches(true);
+    await checkFavoriteDates(true);
   } catch (e) {
     console.error("[scheduler] tick error:", e);
   } finally {

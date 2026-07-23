@@ -1,5 +1,13 @@
 import { Hono } from "hono";
-import { CreateWatchSchema, UpdateSettingsSchema, WatchSchema, type Watch } from "../types";
+import { z } from "zod";
+import {
+  CreateWatchSchema,
+  UpdateSettingsSchema,
+  WatchSchema,
+  FavoriteMovieSchema,
+  FavoriteTheatreSchema,
+  type Watch,
+} from "../types";
 import {
   getSettings,
   updateSettings,
@@ -10,6 +18,9 @@ import {
   watchExists,
   getHistory,
   getActivity,
+  getFavorites,
+  setFavoriteMovies,
+  setFavoriteTheatres,
 } from "../lib/store";
 import {
   checkWatch,
@@ -137,6 +148,35 @@ notifyRouter.post("/scan-now", async (c) => {
   }
 });
 
+// ---- Favorites ------------------------------------------------------------
+
+// GET /api/notify/favorites
+notifyRouter.get("/favorites", (c) => {
+  return c.json({ data: getFavorites() });
+});
+
+// PUT /api/notify/favorites/movies
+notifyRouter.put("/favorites/movies", async (c) => {
+  const body = await c.req.json().catch(() => null);
+  const parsed = z.object({ movies: z.array(FavoriteMovieSchema) }).safeParse(body);
+  if (!parsed.success) {
+    return c.json(badRequest(parsed.error.issues[0]?.message ?? "Invalid favorites"), 400);
+  }
+  setFavoriteMovies(parsed.data.movies);
+  return c.json({ data: getFavorites() });
+});
+
+// PUT /api/notify/favorites/theatres
+notifyRouter.put("/favorites/theatres", async (c) => {
+  const body = await c.req.json().catch(() => null);
+  const parsed = z.object({ theatres: z.array(FavoriteTheatreSchema) }).safeParse(body);
+  if (!parsed.success) {
+    return c.json(badRequest(parsed.error.issues[0]?.message ?? "Invalid favorites"), 400);
+  }
+  setFavoriteTheatres(parsed.data.theatres);
+  return c.json({ data: getFavorites() });
+});
+
 // ---- Settings -------------------------------------------------------------
 
 // Public projection of settings — never leaks the raw bot token.
@@ -148,6 +188,7 @@ function publicSettings() {
     catalogEnabled: s.catalogEnabled,
     catalogIntervalMinutes: s.catalogIntervalMinutes,
     notifyAdvanceTickets: s.notifyAdvanceTickets,
+    notifyFavoriteDates: s.notifyFavoriteDates,
     hasBotToken: Boolean(s.telegramBotToken),
     telegramChatId: s.telegramChatId,
     telegramConnected: Boolean(s.telegramBotToken && s.telegramChatId),

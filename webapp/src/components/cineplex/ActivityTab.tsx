@@ -1,5 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, Ticket, Sparkles, PlayCircle, CalendarClock, RefreshCw, Film } from "lucide-react";
+import {
+  Activity,
+  Ticket,
+  Sparkles,
+  PlayCircle,
+  CalendarClock,
+  CalendarPlus,
+  RefreshCw,
+  Film,
+} from "lucide-react";
 import type { ActivityEvent } from "@/lib/notifyApi";
 import { notifyApi } from "@/lib/notifyApi";
 import { Button } from "@/components/ui/button";
@@ -25,7 +34,19 @@ const TYPE_META: Record<
     icon: CalendarClock,
     className: "bg-amber-500 text-white",
   },
+  favorite_date: {
+    label: "New date",
+    icon: CalendarPlus,
+    className: "bg-accent text-accent-foreground",
+  },
 };
+
+// Fallback for any unknown/new activity type so the feed never crashes.
+const FALLBACK_META = {
+  label: "Update",
+  icon: Activity,
+  className: "bg-secondary text-foreground",
+} as const;
 
 function timeAgo(iso: string): string {
   const then = new Date(iso).getTime();
@@ -41,7 +62,7 @@ function timeAgo(iso: string): string {
 }
 
 function ActivityRow({ event }: { event: ActivityEvent }) {
-  const meta = TYPE_META[event.type];
+  const meta = TYPE_META[event.type] ?? FALLBACK_META;
   const Icon = meta.icon;
 
   return (

@@ -9,6 +9,7 @@ import { MoviesTab } from "@/components/cineplex/MoviesTab";
 import { TheatresTab } from "@/components/cineplex/TheatresTab";
 import { NotifyTab } from "@/components/cineplex/NotifyTab";
 import { ActivityTab } from "@/components/cineplex/ActivityTab";
+import { FavoritesSync } from "@/components/cineplex/FavoritesSync";
 import { cn } from "@/lib/utils";
 
 const Index = () => {
@@ -58,6 +59,9 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Keeps the backend favorites store in sync across all tabs. Renders nothing. */}
+      <FavoritesSync />
+
       {/* Ambient backdrop */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
         <div className="absolute -left-32 -top-32 h-96 w-96 rounded-full bg-primary/10 blur-3xl" />
