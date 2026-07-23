@@ -41,15 +41,26 @@ Notify data (watches, history, settings) is stored as JSON in `DATA_DIR`
 Everything logs to **stdout** — view with `docker logs -f cineplexscraper`.
 Look for `[scheduler]`, `[store]`, `[notify]` and `[static]` prefixes.
 
-## Deploy (Docker + Traefik)
+## Deploy (Docker)
 
 ```bash
 docker compose up -d --build
 docker logs -f cineplexscraper
 ```
 
-Edit the Traefik host rule in `docker-compose.yml` (`cineplex.example.com`) to your
-domain, or uncomment the `ports:` block to publish `8080` directly.
+The app is published on **port 8080**. Open `http://<your-vps-ip>:8080` in a browser.
+To use a different host port, change the left side of `ports` in `docker-compose.yml`
+(e.g. `"80:8080"` to serve on the standard HTTP port).
+
+Already running an old container from a previous project? Reset first:
+
+```bash
+docker compose down
+docker compose up -d --build
+```
+
+Running behind a Traefik reverse proxy with your own domain instead? See the
+commented `labels` block in `docker-compose.yml`.
 
 ### Telegram setup
 

@@ -12,24 +12,28 @@ services:
     volumes:
       # Persists watches, history and settings across restarts / redeploys.
       - cineplex_data:/app/data
-    expose:
-      - "8080"
-    # If you're NOT using Traefik, publish the port directly instead:
-    # ports:
-    #   - "8080:8080"
+    # Publish the app on port 8080 of your VPS. Open http://<your-vps-ip>:8080
+    # Change the left number to use a different host port (e.g. "80:8080").
+    ports:
+      - "8080:8080"
     healthcheck:
       test: ["CMD", "bun", "-e", "fetch('http://localhost:8080/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 10s
-    labels:
-      # --- Traefik reverse-proxy (edit the host rule to your domain) ---------
-      - "traefik.enable=true"
-      - "traefik.http.routers.cineplexscraper.rule=Host(`cineplex.example.com`)"
-      - "traefik.http.routers.cineplexscraper.entrypoints=websecure"
-      - "traefik.http.routers.cineplexscraper.tls.certresolver=letsencrypt"
-      - "traefik.http.services.cineplexscraper.loadbalancer.server.port=8080"
+
+    # ---------------------------------------------------------------------------
+    # OPTIONAL: only if you run a Traefik reverse proxy with your own domain.
+    # If so, remove the "ports:" block above (use "expose: [8080]" instead),
+    # uncomment the labels below, and set your real Host() rule.
+    # ---------------------------------------------------------------------------
+    # labels:
+    #   - "traefik.enable=true"
+    #   - "traefik.http.routers.cineplexscraper.rule=Host(`cineplex.example.com`)"
+    #   - "traefik.http.routers.cineplexscraper.entrypoints=websecure"
+    #   - "traefik.http.routers.cineplexscraper.tls.certresolver=letsencrypt"
+    #   - "traefik.http.services.cineplexscraper.loadbalancer.server.port=8080"
 
 volumes:
   cineplex_data:
