@@ -1,12 +1,15 @@
 import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Film, Globe, Ticket } from "lucide-react";
+import { useQuery, useQueries } from "@tanstack/react-query";
+import { Film, Globe, Ticket, Search, Star } from "lucide-react";
 import type { Movie, Theatre } from "../../../../backend/src/types";
 import { api } from "@/lib/api";
 import { usePersistentState } from "@/hooks/use-persistent-state";
+import { useFavoriteTheatres } from "@/hooks/use-favorite-theatres";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 import { MovieCard } from "./MovieCard";
 import { TheatreCombobox, ALL_THEATRES } from "./TheatreCombobox";
 import { MovieGridSkeleton, ErrorState, EmptyState } from "./StateViews";
@@ -56,6 +59,10 @@ export function MoviesTab() {
     false
   );
   const [advanceOnly, setAdvanceOnly] = usePersistentState<boolean>("movies.advanceOnly", false);
+  const [favoritesOnly, setFavoritesOnly] = usePersistentState<boolean>("movies.favoritesOnly", false);
+  const [search, setSearch] = usePersistentState<string>("movies.search", "");
+
+  const { favorites } = useFavoriteTheatres();
 
   const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ["cineplex", "movies", filter],
@@ -67,18 +74,34 @@ export function MoviesTab() {
     queryFn: fetchTheatres,
   });
 
-  // Film IDs playing at the selected theatre (only fetched when one is picked).
+  // Film IDs playing at the single selected theatre (only when one is picked).
   const { data: theatreFilmIds, isFetching: isFetchingTheatre } = useQuery({
     queryKey: ["cineplex", "theatre-films", theatreId],
     queryFn: () => fetchTheatreFilmIds(theatreId),
     enabled: theatreId !== ALL_THEATRES,
   });
 
+  // Film IDs for each favorite theatre (only when the favorites filter is on).
+  const favQueries = useQueries({
+    queries: favorites.map((id) => ({
+      queryKey: ["cineplex", "theatre-films", String(id)],
+      queryFn: () => fetchTheatreFilmIds(String(id)),
+      enabled: favoritesOnly && favorites.length > 0,
+    })),
+  });
+
   const theatreList = theatres ?? [];
   const selectedTheatre = theatreList.find((t) => String(t.theatreId) === theatreId);
 
+  const favFilmIds = favQueries.flatMap((q) => q.data ?? []);
+  const favFilmKey = favoritesOnly ? [...favFilmIds].sort((a, b) => a - b).join(",") : "";
+  const favLoading = favoritesOnly && favorites.length > 0 && favQueries.some((q) => q.isLoading);
+
   const movies = useMemo(() => {
     let list = data ?? [];
+
+    const q = search.trim().toLowerCase();
+    if (q) list = list.filter((m) => m.name.toLowerCase().includes(q));
 
     if (hideInternational) list = list.filter(isEnglish);
     if (advanceOnly) list = list.filter((m) => m.hasAdvanceTickets);
@@ -88,12 +111,30 @@ export function MoviesTab() {
       list = list.filter((m) => allowed.has(m.id));
     }
 
+    if (favoritesOnly && favorites.length > 0) {
+      const allowed = new Set(favFilmIds);
+      list = list.filter((m) => allowed.has(m.id));
+    }
+
     return [...list].sort(byReleaseDateAsc);
-  }, [data, hideInternational, advanceOnly, theatreId, theatreFilmIds]);
+    // favFilmKey stands in for favFilmIds (stable string of the same data).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    data,
+    search,
+    hideInternational,
+    advanceOnly,
+    theatreId,
+    theatreFilmIds,
+    favoritesOnly,
+    favorites,
+    favFilmKey,
+  ]);
 
   const filteringByTheatre = theatreId !== ALL_THEATRES;
   // While a theatre's film list is still loading, show skeletons not a wrong count.
-  const theatrePending = filteringByTheatre && isFetchingTheatre && !theatreFilmIds;
+  const theatrePending =
+    (filteringByTheatre && isFetchingTheatre && !theatreFilmIds) || favLoading;
 
   return (
     <div className="space-y-5">
@@ -129,11 +170,32 @@ export function MoviesTab() {
         </p>
       </div>
 
+      {/* Movie search */}
+      <div className="relative w-full sm:max-w-sm">
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search movies by name…"
+          className="pl-9"
+        />
+      </div>
+
       {/* Secondary filters: theatre search + toggles */}
       <div className="flex flex-col gap-4 rounded-lg border border-border bg-card/50 p-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex items-center gap-2">
-          <Label className="shrink-0 text-sm text-muted-foreground">Theatre</Label>
-          <TheatreCombobox theatres={theatreList} value={theatreId} onChange={setTheatreId} />
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="flex items-center gap-2">
+            <Label className="shrink-0 text-sm text-muted-foreground">Theatre</Label>
+            <TheatreCombobox theatres={theatreList} value={theatreId} onChange={setTheatreId} />
+          </div>
+
+          <div className="flex items-center gap-2 sm:pl-1">
+            <Star className={cn("h-4 w-4", favoritesOnly ? "fill-amber-400 text-amber-400" : "text-muted-foreground")} />
+            <Label htmlFor="fav-only" className="cursor-pointer whitespace-nowrap text-sm text-muted-foreground">
+              Favorite theatres
+            </Label>
+            <Switch id="fav-only" checked={favoritesOnly} onCheckedChange={setFavoritesOnly} />
+          </div>
         </div>
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-5">
@@ -159,16 +221,20 @@ export function MoviesTab() {
         </div>
       </div>
 
-      {isLoading || theatrePending ? (
+      {favoritesOnly && favorites.length === 0 ? (
+        <EmptyState message="You haven't favorited any theatres yet. Go to the Theatres tab and tap the star to add some." />
+      ) : isLoading || theatrePending ? (
         <MovieGridSkeleton />
       ) : isError ? (
         <ErrorState message={(error as Error)?.message} onRetry={() => refetch()} />
       ) : movies.length === 0 ? (
         <EmptyState
           message={
-            filteringByTheatre
-              ? "No movies match this theatre and filter."
-              : "No movies found for this filter."
+            search
+              ? "No movies match your search and filters."
+              : filteringByTheatre || favoritesOnly
+                ? "No movies match your selected theatres and filters."
+                : "No movies found for this filter."
           }
         />
       ) : (
