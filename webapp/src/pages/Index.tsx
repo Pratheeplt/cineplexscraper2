@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { MoviesTab } from "@/components/cineplex/MoviesTab";
 import { TheatresTab } from "@/components/cineplex/TheatresTab";
 import { NotifyTab } from "@/components/cineplex/NotifyTab";
+import { ActivityTab } from "@/components/cineplex/ActivityTab";
 import { cn } from "@/lib/utils";
 
 const Index = () => {
@@ -17,7 +18,10 @@ const Index = () => {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const tabParam = searchParams.get("tab");
-  const activeTab = tabParam === "notify" || tabParam === "theatres" ? tabParam : "movies";
+  const activeTab =
+    tabParam === "notify" || tabParam === "theatres" || tabParam === "activity"
+      ? tabParam
+      : "movies";
   const preselectFilmId = searchParams.get("filmId")
     ? Number(searchParams.get("filmId"))
     : null;
@@ -91,10 +95,11 @@ const Index = () => {
 
         <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-            <TabsList className="grid w-full max-w-md grid-cols-3">
+            <TabsList className="grid w-full max-w-lg grid-cols-4">
               <TabsTrigger value="movies">Movies</TabsTrigger>
               <TabsTrigger value="theatres">Theatres</TabsTrigger>
               <TabsTrigger value="notify">Notify</TabsTrigger>
+              <TabsTrigger value="activity">Activity</TabsTrigger>
             </TabsList>
 
             <TabsContent value="movies" className="mt-0">
@@ -110,6 +115,10 @@ const Index = () => {
                 preselectFilmId={preselectFilmId}
                 onPreselectConsumed={clearPreselect}
               />
+            </TabsContent>
+
+            <TabsContent value="activity" className="mt-0">
+              <ActivityTab />
             </TabsContent>
           </Tabs>
         </main>

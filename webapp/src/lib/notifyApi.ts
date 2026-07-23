@@ -1,15 +1,26 @@
 import { api } from "@/lib/api";
-import type { Watch, HistoryEntry, ShowSession } from "../../../backend/src/types";
+import type { Watch, HistoryEntry, ShowSession, ActivityEvent } from "../../../backend/src/types";
 
-export type { Watch, HistoryEntry, ShowSession };
+export type { Watch, HistoryEntry, ShowSession, ActivityEvent };
 
 export interface NotifySettings {
   enabled: boolean;
   intervalMinutes: number;
+  catalogEnabled: boolean;
+  catalogIntervalMinutes: number;
+  notifyAdvanceTickets: boolean;
   hasBotToken: boolean;
   telegramChatId: string;
   telegramConnected: boolean;
 }
+
+// The settings fields the UI is allowed to change.
+export type NotifySettingsPatch = Partial<
+  Pick<
+    NotifySettings,
+    "enabled" | "intervalMinutes" | "catalogEnabled" | "catalogIntervalMinutes" | "notifyAdvanceTickets"
+  >
+>;
 
 // Preset check intervals offered in the UI (kept in sync with the backend).
 export const INTERVAL_PRESETS = [
@@ -42,8 +53,12 @@ export const notifyApi = {
 
   getHistory: (limit = 100) => api.get<HistoryEntry[]>(`/api/notify/history?limit=${limit}`),
 
+  getActivity: (limit = 200) => api.get<ActivityEvent[]>(`/api/notify/activity?limit=${limit}`),
+  scanNow: () =>
+    api.post<{ newCount: number; activity: ActivityEvent[] }>("/api/notify/scan-now"),
+
   getSettings: () => api.get<NotifySettings>("/api/notify/settings"),
-  updateSettings: (patch: Partial<Pick<NotifySettings, "enabled" | "intervalMinutes">>) =>
+  updateSettings: (patch: NotifySettingsPatch) =>
     api.patch<NotifySettings>("/api/notify/settings", patch),
 
   connectTelegram: () =>

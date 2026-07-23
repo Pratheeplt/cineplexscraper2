@@ -7,14 +7,25 @@ import {
   SettingsSchema,
   WatchSchema,
   HistoryEntrySchema,
+  ActivityEventSchema,
   type Settings,
   type Watch,
   type HistoryEntry,
+  type ActivityEvent,
 } from "../types";
 
 const DATA_DIR = process.env.DATA_DIR || join(process.cwd(), "data");
 const FILE = join(DATA_DIR, "notify.json");
 const HISTORY_CAP = 500;
+const ACTIVITY_CAP = 500;
+
+// A snapshot of one film from the last catalog scan, used to detect changes.
+export interface CatalogEntry {
+  name: string;
+  hasAdvanceTickets: boolean;
+  releaseDate: string | null;
+  isNowPlaying: boolean;
+}
 
 // Default Telegram bot supplied by the user (t.me/cineplexscraperbot).
 const DEFAULT_BOT_TOKEN =
@@ -26,6 +37,10 @@ interface StoreShape {
   history: HistoryEntry[];
   // per-watch set of showtime sessionIds already seen (for new-showtime diffing)
   seen: Record<string, number[]>;
+  // last catalog scan snapshot, keyed by filmId (string), for change detection
+  catalog: Record<string, CatalogEntry>;
+  // detected catalog-level changes, newest first (Activity tab)
+  activity: ActivityEvent[];
 }
 
 function defaults(): StoreShape {
@@ -34,6 +49,8 @@ function defaults(): StoreShape {
     watches: [],
     history: [],
     seen: {},
+    catalog: {},
+    activity: [],
   };
 }
 
@@ -57,6 +74,10 @@ function load(): void {
         ? raw.history.map((h: unknown) => HistoryEntrySchema.parse(h))
         : [],
       seen: typeof raw.seen === "object" && raw.seen ? raw.seen : {},
+      catalog: typeof raw.catalog === "object" && raw.catalog ? raw.catalog : {},
+      activity: Array.isArray(raw.activity)
+        ? raw.activity.map((a: unknown) => ActivityEventSchema.parse(a))
+        : [],
     };
     // Ensure the default token is present if the user never customized it.
     if (!state.settings.telegramBotToken) state.settings.telegramBotToken = DEFAULT_BOT_TOKEN;
@@ -154,5 +175,31 @@ export function addHistory(entries: HistoryEntry[]): void {
   if (entries.length === 0) return;
   state.history.unshift(...entries);
   if (state.history.length > HISTORY_CAP) state.history.length = HISTORY_CAP;
+  persist();
+}
+
+// ---- Catalog snapshot (change detection) ----------------------------------
+export function getCatalog(): Record<string, CatalogEntry> {
+  return state.catalog;
+}
+
+export function isCatalogInitialized(): boolean {
+  return Object.keys(state.catalog).length > 0;
+}
+
+export function setCatalog(catalog: Record<string, CatalogEntry>): void {
+  state.catalog = catalog;
+  persist();
+}
+
+// ---- Activity feed --------------------------------------------------------
+export function getActivity(limit = 200): ActivityEvent[] {
+  return state.activity.slice(0, limit).map((a) => ({ ...a }));
+}
+
+export function addActivity(entries: ActivityEvent[]): void {
+  if (entries.length === 0) return;
+  state.activity.unshift(...entries);
+  if (state.activity.length > ACTIVITY_CAP) state.activity.length = ACTIVITY_CAP;
   persist();
 }

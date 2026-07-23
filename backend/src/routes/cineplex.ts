@@ -1,7 +1,8 @@
 import { Hono } from "hono";
-import { MovieSchema, TheatreSchema, type Movie, type Theatre } from "../types";
+import { TheatreSchema, type Theatre } from "../types";
 import {
   cineplex,
+  fetchMovies,
   fetchBookableDates,
   fetchShowtimes,
   fetchTheatreFilmIds,
@@ -18,15 +19,7 @@ function upstreamError(e: unknown) {
 cineplexRouter.get("/", async (c) => {
   try {
     const filter = c.req.query("filter");
-    const raw = (await cineplex("movies?language=en")) as { items?: unknown[] };
-    const items = Array.isArray(raw.items) ? raw.items : [];
-
-    const movies: Movie[] = items.map((item) => {
-      const m = MovieSchema.parse(item);
-      // A Coming Soon film with showtimes already loaded = advance tickets on sale.
-      m.hasAdvanceTickets = m.isComingSoon && m.hasShowtimes;
-      return m;
-    });
+    const movies = await fetchMovies();
 
     let filtered = movies;
     if (filter === "now-playing") filtered = movies.filter((m) => m.isNowPlaying);

@@ -12,9 +12,12 @@ import {
   addHistory,
 } from "./store";
 import { sendTelegram } from "./telegram";
+import { scanCatalog } from "./catalog";
 
 let timer: ReturnType<typeof setInterval> | null = null;
+let catalogTimer: ReturnType<typeof setInterval> | null = null;
 let running = false;
+let catalogRunning = false;
 let idCounter = 0;
 
 function newId(prefix: string): string {
@@ -141,21 +144,59 @@ async function tick(): Promise<void> {
   }
 }
 
-/** (Re)start the interval loop from the current settings. */
+/** Run a full catalog scan (new movies, advance tickets, date changes). */
+export async function scanCatalogNow(notify = true): Promise<number> {
+  const events = await scanCatalog(notify);
+  return events.length;
+}
+
+async function catalogTick(): Promise<void> {
+  if (catalogRunning) {
+    console.log("[catalog] previous scan still running, skipping tick");
+    return;
+  }
+  const { catalogEnabled } = getSettings();
+  if (!catalogEnabled) return;
+  catalogRunning = true;
+  try {
+    await scanCatalog(true);
+  } catch (e) {
+    console.error("[catalog] tick error:", (e as Error).message);
+  } finally {
+    catalogRunning = false;
+  }
+}
+
+/** (Re)start both interval loops from the current settings. */
 export function restartScheduler(): void {
   if (timer) {
     clearInterval(timer);
     timer = null;
   }
-  const { intervalMinutes, enabled } = getSettings();
+  if (catalogTimer) {
+    clearInterval(catalogTimer);
+    catalogTimer = null;
+  }
+  const { intervalMinutes, enabled, catalogIntervalMinutes, catalogEnabled } = getSettings();
+
   const ms = Math.max(1, intervalMinutes) * 60 * 1000;
   timer = setInterval(tick, ms);
   console.log(
     `[scheduler] ${enabled ? "enabled" : "disabled"} — interval ${intervalMinutes} min (${ms} ms)`
   );
+
+  const catalogMs = Math.max(1, catalogIntervalMinutes) * 60 * 1000;
+  catalogTimer = setInterval(catalogTick, catalogMs);
+  console.log(
+    `[catalog] ${catalogEnabled ? "enabled" : "disabled"} — interval ${catalogIntervalMinutes} min (${catalogMs} ms)`
+  );
 }
 
 export function startScheduler(): void {
   restartScheduler();
+  // Establish a catalog baseline at startup so the next scan can detect changes.
+  scanCatalog(false)
+    .then((e) => console.log(`[catalog] baseline established (${e.length} events)`))
+    .catch((err) => console.error("[catalog] baseline scan failed:", (err as Error).message));
   console.log("[scheduler] started");
 }

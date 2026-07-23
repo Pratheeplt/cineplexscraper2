@@ -9,8 +9,14 @@ import {
   deleteWatch,
   watchExists,
   getHistory,
+  getActivity,
 } from "../lib/store";
-import { checkWatch, checkAllWatches, restartScheduler } from "../lib/scheduler";
+import {
+  checkWatch,
+  checkAllWatches,
+  restartScheduler,
+  scanCatalogNow,
+} from "../lib/scheduler";
 import { sendTelegram, detectChatId } from "../lib/telegram";
 
 const notifyRouter = new Hono();
@@ -113,21 +119,44 @@ notifyRouter.get("/history", (c) => {
   return c.json({ data: getHistory(limit) });
 });
 
+// ---- Activity (catalog changes) -------------------------------------------
+
+// GET /api/notify/activity?limit=200
+notifyRouter.get("/activity", (c) => {
+  const limit = Number(c.req.query("limit")) || 200;
+  return c.json({ data: getActivity(limit) });
+});
+
+// POST /api/notify/scan-now — run a catalog scan immediately
+notifyRouter.post("/scan-now", async (c) => {
+  try {
+    const newCount = await scanCatalogNow(true);
+    return c.json({ data: { newCount, activity: getActivity(200) } });
+  } catch (e) {
+    return c.json(badRequest((e as Error).message, "SCAN_FAILED"), 502);
+  }
+});
+
 // ---- Settings -------------------------------------------------------------
+
+// Public projection of settings — never leaks the raw bot token.
+function publicSettings() {
+  const s = getSettings();
+  return {
+    enabled: s.enabled,
+    intervalMinutes: s.intervalMinutes,
+    catalogEnabled: s.catalogEnabled,
+    catalogIntervalMinutes: s.catalogIntervalMinutes,
+    notifyAdvanceTickets: s.notifyAdvanceTickets,
+    hasBotToken: Boolean(s.telegramBotToken),
+    telegramChatId: s.telegramChatId,
+    telegramConnected: Boolean(s.telegramBotToken && s.telegramChatId),
+  };
+}
 
 // GET /api/notify/settings
 notifyRouter.get("/settings", (c) => {
-  const s = getSettings();
-  // Never leak the raw bot token to the frontend.
-  return c.json({
-    data: {
-      enabled: s.enabled,
-      intervalMinutes: s.intervalMinutes,
-      hasBotToken: Boolean(s.telegramBotToken),
-      telegramChatId: s.telegramChatId,
-      telegramConnected: Boolean(s.telegramBotToken && s.telegramChatId),
-    },
-  });
+  return c.json({ data: publicSettings() });
 });
 
 // PATCH /api/notify/settings
@@ -137,17 +166,9 @@ notifyRouter.patch("/settings", async (c) => {
   if (!parsed.success) {
     return c.json(badRequest(parsed.error.issues[0]?.message ?? "Invalid settings"), 400);
   }
-  const updated = updateSettings(parsed.data);
-  restartScheduler(); // interval / enabled may have changed
-  return c.json({
-    data: {
-      enabled: updated.enabled,
-      intervalMinutes: updated.intervalMinutes,
-      hasBotToken: Boolean(updated.telegramBotToken),
-      telegramChatId: updated.telegramChatId,
-      telegramConnected: Boolean(updated.telegramBotToken && updated.telegramChatId),
-    },
-  });
+  updateSettings(parsed.data);
+  restartScheduler(); // interval / enabled (either loop) may have changed
+  return c.json({ data: publicSettings() });
 });
 
 // ---- Telegram -------------------------------------------------------------

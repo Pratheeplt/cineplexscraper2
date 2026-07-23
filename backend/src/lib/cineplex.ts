@@ -1,6 +1,6 @@
 // Shared Cineplex API client + normalizers.
 // Used by both the HTTP routes and the background scheduler.
-import { ShowSessionSchema, type ShowSession } from "../types";
+import { MovieSchema, ShowSessionSchema, type Movie, type ShowSession } from "../types";
 
 const CINEPLEX_KEY = "dcdac5601d864addbc2675a2e96cb1f8"; // public key from cineplex.com website JS
 
@@ -17,6 +17,21 @@ export async function cineplex(path: string): Promise<unknown> {
   });
   if (!res.ok) throw new Error(`Cineplex ${path} -> ${res.status}`);
   return res.json();
+}
+
+/**
+ * The full movie catalog (en). Normalizes each item and derives
+ * `hasAdvanceTickets` (a Coming Soon film that already has showtimes loaded).
+ * Shared by the /api/cineplex route and the background catalog scanner.
+ */
+export async function fetchMovies(): Promise<Movie[]> {
+  const raw = (await cineplex("movies?language=en")) as { items?: unknown[] };
+  const items = Array.isArray(raw.items) ? raw.items : [];
+  return items.map((item) => {
+    const m = MovieSchema.parse(item);
+    m.hasAdvanceTickets = m.isComingSoon && m.hasShowtimes;
+    return m;
+  });
 }
 
 /**

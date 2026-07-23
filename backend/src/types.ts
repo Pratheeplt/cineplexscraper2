@@ -106,11 +106,40 @@ export const SettingsSchema = z.object({
   intervalMinutes: z.number().default(30),
   telegramBotToken: z.string().default(""),
   telegramChatId: z.string().default(""),
+  // --- Catalog watch: periodically scans the whole movie list for changes ---
+  // (new movies, advance tickets released, etc.) and feeds the Activity tab.
+  catalogEnabled: z.boolean().default(true),
+  catalogIntervalMinutes: z.number().default(60),
+  // When on, a Telegram alert is sent whenever advance tickets are released.
+  notifyAdvanceTickets: z.boolean().default(false),
 });
 export type Settings = z.infer<typeof SettingsSchema>;
 
 export const UpdateSettingsSchema = SettingsSchema.partial();
 export type UpdateSettings = z.infer<typeof UpdateSettingsSchema>;
+
+// ---------------------------------------------------------------------------
+// Activity — catalog-level changes detected by the background scanner.
+// ---------------------------------------------------------------------------
+export const ACTIVITY_TYPES = [
+  "new_movie", // a film appeared in the catalog for the first time
+  "advance_tickets", // a Coming Soon film now has advance tickets on sale
+  "now_playing", // a film moved from Coming Soon to Now Playing
+  "release_date", // a film's release date changed
+] as const;
+
+export const ActivityEventSchema = z.object({
+  id: z.string(),
+  type: z.enum(ACTIVITY_TYPES),
+  filmId: z.number(),
+  filmName: z.string(),
+  posterUrl: z.string().nullable().optional(),
+  detail: z.string(), // human-readable summary, e.g. "Advance tickets now on sale"
+  releaseDate: z.string().nullable().optional(),
+  detectedAt: z.string(),
+});
+export type ActivityEvent = z.infer<typeof ActivityEventSchema>;
+export type ActivityType = (typeof ACTIVITY_TYPES)[number];
 
 // Preset check intervals offered in the UI (minutes).
 export const INTERVAL_PRESETS = [

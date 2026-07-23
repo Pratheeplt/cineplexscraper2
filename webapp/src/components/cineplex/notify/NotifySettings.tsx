@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bell, Clock, Send, Link2, CheckCircle2, AlertCircle } from "lucide-react";
-import { notifyApi, INTERVAL_PRESETS, type NotifySettings as Settings } from "@/lib/notifyApi";
+import { Bell, Clock, Send, Link2, CheckCircle2, AlertCircle, Ticket, RefreshCw } from "lucide-react";
+import { notifyApi, INTERVAL_PRESETS, type NotifySettingsPatch } from "@/lib/notifyApi";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -26,8 +26,7 @@ export function NotifySettings() {
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["notify", "settings"] });
 
   const update = useMutation({
-    mutationFn: (patch: Partial<Pick<Settings, "enabled" | "intervalMinutes">>) =>
-      notifyApi.updateSettings(patch),
+    mutationFn: (patch: NotifySettingsPatch) => notifyApi.updateSettings(patch),
     onSuccess: invalidate,
     onError: (e) =>
       toast({ variant: "destructive", title: "Update failed", description: (e as Error).message }),
@@ -98,6 +97,71 @@ export function NotifySettings() {
               ))}
             </SelectContent>
           </Select>
+        </div>
+      </div>
+
+      {/* Advance tickets alert */}
+      <div className="mt-4 flex items-center justify-between rounded-lg border border-blue-500/30 bg-blue-500/5 px-3 py-2.5">
+        <div className="flex items-center gap-2">
+          <Ticket className="h-4 w-4 text-blue-500" />
+          <div>
+            <Label htmlFor="notify-advance" className="text-sm font-medium">
+              Advance ticket alerts
+            </Label>
+            <p className="text-xs text-muted-foreground">
+              Get a Telegram message when advance tickets are released
+            </p>
+          </div>
+        </div>
+        <Switch
+          id="notify-advance"
+          checked={settings?.notifyAdvanceTickets ?? false}
+          onCheckedChange={(v) => update.mutate({ notifyAdvanceTickets: v })}
+        />
+      </div>
+
+      {/* Catalog data refresh */}
+      <div className="mt-4 rounded-lg border border-border/60 bg-background/50 p-3">
+        <div className="flex items-center gap-2">
+          <RefreshCw className="h-4 w-4 text-primary" />
+          <h4 className="text-sm font-semibold text-foreground">Data refresh</h4>
+        </div>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          How often we re-scan Cineplex for new movies, advance tickets and date changes (shown in
+          the Activity tab).
+        </p>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <div className="flex items-center justify-between rounded-lg border border-border/60 bg-card px-3 py-2.5">
+            <Label htmlFor="catalog-enabled" className="text-sm font-medium">
+              Auto-refresh
+            </Label>
+            <Switch
+              id="catalog-enabled"
+              checked={settings?.catalogEnabled ?? false}
+              onCheckedChange={(v) => update.mutate({ catalogEnabled: v })}
+            />
+          </div>
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-card px-3 py-2.5">
+            <div className="flex items-center gap-2">
+              <Clock className="h-4 w-4 text-muted-foreground" />
+              <Label className="text-sm font-medium">Refresh every</Label>
+            </div>
+            <Select
+              value={String(settings?.catalogIntervalMinutes ?? 60)}
+              onValueChange={(v) => update.mutate({ catalogIntervalMinutes: Number(v) })}
+            >
+              <SelectTrigger className="w-[150px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {INTERVAL_PRESETS.map((p) => (
+                  <SelectItem key={p.minutes} value={String(p.minutes)}>
+                    {p.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </div>
 
