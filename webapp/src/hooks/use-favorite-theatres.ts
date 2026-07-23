@@ -47,6 +47,18 @@ function write(ids: number[]) {
   emit();
 }
 
+// Replace local favorite theatre IDs with the backend's copy WITHOUT pushing
+// back to the server. Used on app load so favorites follow the user across
+// every device — the backend store is the single source of truth.
+export function hydrateFavoriteTheatres(ids: number[]) {
+  try {
+    localStorage.setItem(KEY, JSON.stringify(ids));
+  } catch {
+    // ignore write failures
+  }
+  emit();
+}
+
 export function useFavoriteTheatres() {
   const favorites = useSyncExternalStore(subscribe, () => snapshot);
 

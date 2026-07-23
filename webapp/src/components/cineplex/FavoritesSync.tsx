@@ -1,27 +1,33 @@
 import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { Theatre } from "../../../../backend/src/types";
-import type { FavoriteTheatre } from "@/lib/notifyApi";
+import type { FavoriteMovie, FavoriteTheatre } from "@/lib/notifyApi";
 import { api } from "@/lib/api";
 import { notifyApi } from "@/lib/notifyApi";
-import { useFavoriteMovies } from "@/hooks/use-favorite-movies";
-import { useFavoriteTheatres } from "@/hooks/use-favorite-theatres";
+import { useFavoriteTheatres, hydrateFavoriteTheatres } from "@/hooks/use-favorite-theatres";
+import { useFavoriteMovies, hydrateFavoriteMovies } from "@/hooks/use-favorite-movies";
 
 function fetchTheatres(): Promise<Theatre[]> {
   return api.get<Theatre[]>("/api/cineplex/theatres");
 }
 
-// Always-mounted, renders nothing. Keeps the backend's favorites store in sync
-// with the browser's localStorage-backed favorites so the background scheduler
-// can watch favorite movies across favorite theatres.
+// Stable key for a set of favorite theatres, independent of ordering.
+function theatresKey(list: FavoriteTheatre[]): string {
+  return JSON.stringify([...list].sort((a, b) => a.theatreId - b.theatreId));
+}
+
+// Always-mounted, renders nothing. Makes the backend's favorites store the
+// single source of truth so favorites follow the user across every device.
 //
-// Favorite MOVIES already mirror to the backend inside the hook's write(), but
-// we also push them once on mount here in case the backend was reset while the
-// browser still had them stored locally.
+// On load we reconcile ONCE: merge this device's local favorites with the
+// backend's copy (union), write the merged set into local, and push it back so
+// the backend holds everything. Only AFTER this reconciliation do we push
+// further local changes — otherwise a fresh device with empty localStorage
+// would overwrite the backend with nothing.
 //
-// Favorite THEATRES only store IDs locally (to keep MoviesTab's number[] API),
-// so here we resolve their names from the shared theatres query and PUT the
-// full { theatreId, theatreName }[] whenever the resolved list changes.
+// Favorite MOVIES store full objects (the scheduler needs name + poster).
+// Favorite THEATRES store only IDs locally, so we resolve their names from the
+// shared theatres query before pushing the full { theatreId, theatreName }[].
 export function FavoritesSync() {
   const { favorites: favoriteTheatreIds } = useFavoriteTheatres();
   const { favorites: favoriteMovies } = useFavoriteMovies();
@@ -31,21 +37,60 @@ export function FavoritesSync() {
     queryFn: fetchTheatres,
   });
 
-  // Push favorite movies once on mount (backend-reset recovery).
-  const pushedMoviesOnMount = useRef(false);
-  useEffect(() => {
-    if (pushedMoviesOnMount.current) return;
-    pushedMoviesOnMount.current = true;
-    void notifyApi.setFavoriteMovies(favoriteMovies).catch(() => {});
-    // Intentionally run only once on mount.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const { data: serverFavorites } = useQuery({
+    queryKey: ["notify", "favorites"],
+    queryFn: () => notifyApi.getFavorites(),
+  });
 
-  // Sync favorite theatres whenever the resolved list changes. Dedup so we
-  // don't PUT an identical payload repeatedly.
+  // Has the local store been reconciled with the backend copy yet?
+  const hydrated = useRef(false);
+  // Last theatre payload pushed to the backend — dedupes redundant PUTs.
   const lastTheatresKey = useRef<string | null>(null);
+
+  // Reconcile once: union of local + backend becomes the truth on both sides.
   useEffect(() => {
-    // Wait until theatres data is available so we can resolve names.
+    if (hydrated.current) return;
+    if (!serverFavorites) return;
+    // Need theatre names to represent any local-only theatre IDs on the backend.
+    if (!theatres || theatres.length === 0) return;
+    hydrated.current = true;
+
+    const nameById = new Map(theatres.map((t) => [t.theatreId, t.theatreName]));
+
+    // Movies: union by filmId (backend entries win on conflict).
+    const movieMap = new Map<number, FavoriteMovie>();
+    for (const m of favoriteMovies) movieMap.set(m.filmId, m);
+    for (const m of serverFavorites.movies) movieMap.set(m.filmId, m);
+    const mergedMovies = [...movieMap.values()];
+
+    // Theatres: union by theatreId.
+    const theatreMap = new Map<number, FavoriteTheatre>();
+    for (const t of serverFavorites.theatres) theatreMap.set(t.theatreId, t);
+    for (const id of favoriteTheatreIds) {
+      if (theatreMap.has(id)) continue;
+      const name = nameById.get(id);
+      if (name) theatreMap.set(id, { theatreId: id, theatreName: name });
+    }
+    const mergedTheatres = [...theatreMap.values()];
+
+    // Write the merged set into this device's local store.
+    hydrateFavoriteMovies(mergedMovies);
+    hydrateFavoriteTheatres(mergedTheatres.map((t) => t.theatreId));
+
+    // Push back only when we actually added something the backend was missing.
+    if (mergedMovies.length !== serverFavorites.movies.length) {
+      void notifyApi.setFavoriteMovies(mergedMovies).catch(() => {});
+    }
+    lastTheatresKey.current = theatresKey(mergedTheatres);
+    if (mergedTheatres.length !== serverFavorites.theatres.length) {
+      void notifyApi.setFavoriteTheatres(mergedTheatres).catch(() => {});
+    }
+  }, [serverFavorites, theatres, favoriteMovies, favoriteTheatreIds]);
+
+  // Push favorite theatres to the backend whenever the resolved list changes.
+  // Suppressed until reconciliation completes so we never clobber the server.
+  useEffect(() => {
+    if (!hydrated.current) return;
     if (!theatres || theatres.length === 0) return;
 
     const byId = new Map(theatres.map((t) => [t.theatreId, t.theatreName]));
@@ -56,9 +101,7 @@ export function FavoritesSync() {
       })
       .filter((t): t is FavoriteTheatre => t !== null);
 
-    const key = JSON.stringify(
-      [...resolved].sort((a, b) => a.theatreId - b.theatreId)
-    );
+    const key = theatresKey(resolved);
     if (key === lastTheatresKey.current) return;
     lastTheatresKey.current = key;
 

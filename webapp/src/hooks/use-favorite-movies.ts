@@ -58,6 +58,18 @@ function write(movies: FavoriteMovie[]) {
   void notifyApi.setFavoriteMovies(movies).catch(() => {});
 }
 
+// Replace local favorites with the backend's copy WITHOUT pushing back to the
+// server. Used on app load so favorites follow the user across every device —
+// the backend store is the single source of truth.
+export function hydrateFavoriteMovies(movies: FavoriteMovie[]) {
+  try {
+    localStorage.setItem(KEY, JSON.stringify(movies));
+  } catch {
+    // ignore write failures
+  }
+  emit();
+}
+
 export function useFavoriteMovies() {
   const favorites = useSyncExternalStore(subscribe, () => snapshot);
 
