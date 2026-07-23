@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { MovieCard } from "./MovieCard";
 import { TheatreCombobox, ALL_THEATRES } from "./TheatreCombobox";
+import { GenreFilter, GenreChips } from "./GenreFilter";
 import { MovieGridSkeleton, ErrorState, EmptyState } from "./StateViews";
 
 type MovieFilter = "all" | "now-playing" | "coming-soon";
@@ -61,6 +62,7 @@ export function MoviesTab() {
   const [advanceOnly, setAdvanceOnly] = usePersistentState<boolean>("movies.advanceOnly", false);
   const [favoritesOnly, setFavoritesOnly] = usePersistentState<boolean>("movies.favoritesOnly", false);
   const [search, setSearch] = usePersistentState<string>("movies.search", "");
+  const [genres, setGenres] = usePersistentState<string[]>("movies.genres", []);
 
   const { favorites } = useFavoriteTheatres();
 
@@ -97,6 +99,13 @@ export function MoviesTab() {
   const favFilmKey = favoritesOnly ? [...favFilmIds].sort((a, b) => a - b).join(",") : "";
   const favLoading = favoritesOnly && favorites.length > 0 && favQueries.some((q) => q.isLoading);
 
+  // All genres present in the current movie set, alphabetized, for the filter.
+  const allGenres = useMemo(() => {
+    const set = new Set<string>();
+    for (const m of data ?? []) for (const g of m.genres) set.add(g);
+    return [...set].sort((a, b) => a.localeCompare(b));
+  }, [data]);
+
   const movies = useMemo(() => {
     let list = data ?? [];
 
@@ -105,6 +114,12 @@ export function MoviesTab() {
 
     if (hideInternational) list = list.filter(isEnglish);
     if (advanceOnly) list = list.filter((m) => m.hasAdvanceTickets);
+
+    // Genre filter: keep movies that have AT LEAST ONE of the selected genres.
+    if (genres.length > 0) {
+      const wanted = new Set(genres);
+      list = list.filter((m) => m.genres.some((g) => wanted.has(g)));
+    }
 
     if (theatreId !== ALL_THEATRES && theatreFilmIds) {
       const allowed = new Set(theatreFilmIds);
@@ -124,6 +139,7 @@ export function MoviesTab() {
     search,
     hideInternational,
     advanceOnly,
+    genres,
     theatreId,
     theatreFilmIds,
     favoritesOnly,
@@ -189,6 +205,11 @@ export function MoviesTab() {
             <TheatreCombobox theatres={theatreList} value={theatreId} onChange={setTheatreId} />
           </div>
 
+          <div className="flex items-center gap-2">
+            <Label className="shrink-0 text-sm text-muted-foreground">Genre</Label>
+            <GenreFilter genres={allGenres} selected={genres} onChange={setGenres} />
+          </div>
+
           <div className="flex items-center gap-2 sm:pl-1">
             <Star className={cn("h-4 w-4", favoritesOnly ? "fill-amber-400 text-amber-400" : "text-muted-foreground")} />
             <Label htmlFor="fav-only" className="cursor-pointer whitespace-nowrap text-sm text-muted-foreground">
@@ -220,6 +241,9 @@ export function MoviesTab() {
           </div>
         </div>
       </div>
+
+      {/* Active genre chips (tap to remove) */}
+      <GenreChips selected={genres} onRemove={(g) => setGenres(genres.filter((x) => x !== g))} />
 
       {favoritesOnly && favorites.length === 0 ? (
         <EmptyState message="You haven't favorited any theatres yet. Go to the Theatres tab and tap the star to add some." />
