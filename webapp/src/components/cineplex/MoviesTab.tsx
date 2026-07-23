@@ -268,6 +268,7 @@ export function MoviesTab() {
               key={movie.id}
               movie={movie}
               theatreName={selectedTheatre?.theatreName ?? null}
+              locationId={theatreId !== ALL_THEATRES ? theatreId : null}
             />
           ))}
         </div>
