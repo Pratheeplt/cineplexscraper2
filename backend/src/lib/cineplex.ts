@@ -72,6 +72,8 @@ type RawSession = {
   isSoldOut?: boolean;
   ticketingUrl?: string | null;
   deeplinkUrl?: string | null;
+  seatMapUrl?: string | null;
+  isReservedSeating?: boolean;
 };
 type RawExperience = { experienceTypes?: string[]; sessions?: RawSession[] };
 type RawMovie = { id?: number; experiences?: RawExperience[] };
@@ -111,6 +113,8 @@ export async function fetchShowtimes(
                 isSoldOut: s.isSoldOut ?? false,
                 experienceTypes: types,
                 ticketingUrl: s.ticketingUrl ?? s.deeplinkUrl ?? null,
+                seatMapUrl: s.seatMapUrl ?? null,
+                isReservedSeating: s.isReservedSeating ?? false,
               })
             );
           }

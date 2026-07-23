@@ -51,6 +51,10 @@ export const ShowSessionSchema = z.object({
   isSoldOut: z.boolean().default(false),
   experienceTypes: z.array(z.string()).default([]),
   ticketingUrl: z.string().nullable().optional(),
+  // Official Cineplex seat-map preview page for this session (opens externally).
+  seatMapUrl: z.string().nullable().optional(),
+  // Whether this session uses reserved (pick-your-seat) seating.
+  isReservedSeating: z.boolean().default(false),
 });
 export type ShowSession = z.infer<typeof ShowSessionSchema>;
 
