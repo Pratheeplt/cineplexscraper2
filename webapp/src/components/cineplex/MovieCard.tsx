@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Clock, Calendar, Film, ExternalLink, Bell, Ticket, MapPin } from "lucide-react";
+import { Clock, Calendar, Film, ExternalLink, Bell, Ticket, MapPin, Languages } from "lucide-react";
 import type { Movie } from "../../../../backend/src/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -82,10 +82,57 @@ export function MovieCard({
         </div>
 
         {movie.detailPageUrl ? (
-          <div className="absolute right-2 top-2 rounded-full bg-background/70 p-1.5 opacity-0 backdrop-blur transition-opacity group-hover:opacity-100">
+          <div className="absolute right-2 top-2 z-10 rounded-full bg-background/70 p-1.5 opacity-0 backdrop-blur transition-opacity group-hover:opacity-100">
             <ExternalLink className="h-3.5 w-3.5 text-foreground" />
           </div>
         ) : null}
+
+        {/* Hover overlay: translucent panel with the movie's details. */}
+        <div
+          className={cn(
+            "pointer-events-none absolute inset-0 flex flex-col gap-2 overflow-y-auto bg-background/85 p-3 backdrop-blur-sm",
+            "opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+          )}
+        >
+          <h4 className="font-display text-base leading-tight text-foreground">{movie.name}</h4>
+
+          <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+            {fullReleaseDate ? (
+              <span className="inline-flex items-center gap-1">
+                <Calendar className="h-3 w-3" />
+                {fullReleaseDate}
+              </span>
+            ) : null}
+            {movie.runtimeInMinutes ? (
+              <span className="inline-flex items-center gap-1">
+                <Clock className="h-3 w-3" />
+                {movie.runtimeInMinutes} min
+              </span>
+            ) : null}
+            {movie.language ? (
+              <span className="inline-flex items-center gap-1">
+                <Languages className="h-3 w-3" />
+                {movie.language}
+              </span>
+            ) : null}
+          </div>
+
+          {movie.genres.length > 0 ? (
+            <p className="text-xs leading-relaxed text-foreground/80">
+              {movie.genres.join(" · ")}
+            </p>
+          ) : null}
+
+          {movie.distributor ? (
+            <p className="text-[11px] text-muted-foreground">
+              <span className="text-foreground/70">Distributor:</span> {movie.distributor}
+            </p>
+          ) : null}
+
+          <p className="mt-auto text-[11px] font-medium text-primary">
+            {movie.detailPageUrl ? "Click to view full details on Cineplex →" : ""}
+          </p>
+        </div>
 
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-card to-transparent" />
       </div>
