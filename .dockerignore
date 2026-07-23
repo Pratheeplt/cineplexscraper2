@@ -6,7 +6,6 @@
 **/.env.local
 **/.env.*.local
 .claude
-cineplex-scraper
 webapp/dist
 backend/public
 backend/data
