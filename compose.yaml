@@ -1,7 +1,6 @@
 services:
-  cineplexscraper2:
+  cineplexscraper:
     build: .
-    image: cineplexscraper
     container_name: cineplexscraper
     restart: unless-stopped
     environment:
