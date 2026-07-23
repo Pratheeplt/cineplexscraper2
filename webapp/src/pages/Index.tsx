@@ -1,40 +1,88 @@
-// ⚠️ THIS ENTIRE PAGE IS A PLACEHOLDER. DELETE ALL OF THIS CODE AND REPLACE IT WITH THE USER'S APP.
-// Do NOT preserve any part of this file — not the layout, not the styling, not the structure.
-// Do NOT use this page as a starting point or reference. Start from scratch based on what the user asks for.
-// When you build the real page, remove these comments entirely.
+import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { RefreshCw, Clapperboard } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { useToast } from "@/hooks/use-toast";
+import { MoviesTab } from "@/components/cineplex/MoviesTab";
+import { TheatresTab } from "@/components/cineplex/TheatresTab";
+import { cn } from "@/lib/utils";
 
 const Index = () => {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await queryClient.refetchQueries({ queryKey: ["cineplex"] });
+      toast({ title: "Refreshed", description: "Latest data loaded from cineplex.com." });
+    } catch {
+      toast({
+        variant: "destructive",
+        title: "Refresh failed",
+        description: "Could not reach the server. Please try again.",
+      });
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   return (
-    // Placeholder Content, needs to be fully replaced with the user's content.
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background">
-      <div className="pointer-events-none absolute inset-0">
-        <div className="absolute left-1/4 top-1/3 h-72 w-72 rounded-full bg-primary/10 blur-3xl animate-glow-pulse" />
-        <div className="absolute bottom-1/3 right-1/4 h-72 w-72 rounded-full bg-accent/10 blur-3xl animate-glow-pulse" style={{ animationDelay: "1.5s" }} />
+    <div className="min-h-screen bg-background">
+      {/* Ambient backdrop */}
+      <div className="pointer-events-none fixed inset-0 overflow-hidden">
+        <div className="absolute -left-32 -top-32 h-96 w-96 rounded-full bg-primary/10 blur-3xl" />
+        <div className="absolute -right-24 top-40 h-80 w-80 rounded-full bg-accent/10 blur-3xl" />
       </div>
-      <div className="relative z-10 text-center px-6 max-w-3xl">
-        <h1
-          className="font-syne text-2xl sm:text-3xl md:text-4xl font-bold leading-normal whitespace-nowrap animate-shimmer-sweep"
-          style={{
-            background: "linear-gradient(90deg, hsl(var(--foreground)) 0%, hsl(var(--foreground)) 35%, hsl(var(--primary)) 45%, hsl(var(--accent)) 55%, hsl(var(--foreground)) 65%, hsl(var(--foreground)) 100%)",
-            backgroundSize: "200% 100%",
-            WebkitBackgroundClip: "text",
-            backgroundClip: "text",
-            color: "transparent",
-          }}
-        >
-          Welcome to vibecode.dev
-        </h1>
-        <p className="mt-8 text-base sm:text-lg text-muted-foreground leading-relaxed">
-          Share your idea with Claude Code and see it come to life.
-        </p>
+
+      <div className="relative z-10">
+        <header className="border-b border-border/60 bg-background/80 backdrop-blur">
+          <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-6 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary shadow-[0_0_24px_-4px_hsl(var(--primary)/0.7)]">
+                <Clapperboard className="h-6 w-6 text-primary-foreground" />
+              </div>
+              <div>
+                <h1 className="font-display text-3xl leading-none text-foreground sm:text-4xl">
+                  Cineplex <span className="text-primary">Scraper</span>
+                </h1>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Live data from cineplex.com — no login required
+                </p>
+              </div>
+            </div>
+
+            <Button
+              onClick={handleRefresh}
+              disabled={refreshing}
+              variant="outline"
+              className="w-full border-primary/40 hover:bg-primary/10 sm:w-auto"
+            >
+              <RefreshCw className={cn("mr-2 h-4 w-4", refreshing && "animate-spin")} />
+              Refresh
+            </Button>
+          </div>
+        </header>
+
+        <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+          <Tabs defaultValue="movies" className="space-y-6">
+            <TabsList className="grid w-full max-w-sm grid-cols-2">
+              <TabsTrigger value="movies">Movies</TabsTrigger>
+              <TabsTrigger value="theatres">Theatres</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="movies" className="mt-0">
+              <MoviesTab />
+            </TabsContent>
+
+            <TabsContent value="theatres" className="mt-0">
+              <TheatresTab />
+            </TabsContent>
+          </Tabs>
+        </main>
       </div>
-      <div
-        className="pointer-events-none absolute inset-0 opacity-[0.02]"
-        style={{
-          backgroundImage: "linear-gradient(hsl(var(--foreground)) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--foreground)) 1px, transparent 1px)",
-          backgroundSize: "60px 60px",
-        }}
-      />
     </div>
   );
 };
