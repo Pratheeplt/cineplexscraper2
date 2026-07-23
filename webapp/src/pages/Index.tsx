@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { RefreshCw, Clapperboard } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -6,12 +7,34 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { MoviesTab } from "@/components/cineplex/MoviesTab";
 import { TheatresTab } from "@/components/cineplex/TheatresTab";
+import { NotifyTab } from "@/components/cineplex/NotifyTab";
 import { cn } from "@/lib/utils";
 
 const Index = () => {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [refreshing, setRefreshing] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const tabParam = searchParams.get("tab");
+  const activeTab = tabParam === "notify" || tabParam === "theatres" ? tabParam : "movies";
+  const preselectFilmId = searchParams.get("filmId")
+    ? Number(searchParams.get("filmId"))
+    : null;
+
+  const setActiveTab = (value: string) => {
+    const next = new URLSearchParams(searchParams);
+    if (value === "movies") next.delete("tab");
+    else next.set("tab", value);
+    if (value !== "notify") next.delete("filmId");
+    setSearchParams(next, { replace: true });
+  };
+
+  const clearPreselect = () => {
+    const next = new URLSearchParams(searchParams);
+    next.delete("filmId");
+    setSearchParams(next, { replace: true });
+  };
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -67,10 +90,11 @@ const Index = () => {
         </header>
 
         <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-          <Tabs defaultValue="movies" className="space-y-6">
-            <TabsList className="grid w-full max-w-sm grid-cols-2">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+            <TabsList className="grid w-full max-w-md grid-cols-3">
               <TabsTrigger value="movies">Movies</TabsTrigger>
               <TabsTrigger value="theatres">Theatres</TabsTrigger>
+              <TabsTrigger value="notify">Notify</TabsTrigger>
             </TabsList>
 
             <TabsContent value="movies" className="mt-0">
@@ -79,6 +103,13 @@ const Index = () => {
 
             <TabsContent value="theatres" className="mt-0">
               <TheatresTab />
+            </TabsContent>
+
+            <TabsContent value="notify" className="mt-0">
+              <NotifyTab
+                preselectFilmId={preselectFilmId}
+                onPreselectConsumed={clearPreselect}
+              />
             </TabsContent>
           </Tabs>
         </main>

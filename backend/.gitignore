@@ -23,6 +23,9 @@ studio.log
 .env.production.local
 .env.local
 
+# persistent Notify data (runtime)
+data
+
 # caches
 .eslintcache
 .cache

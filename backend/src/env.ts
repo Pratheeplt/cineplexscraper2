@@ -8,6 +8,13 @@ const envSchema = z.object({
   // Server Configuration
   PORT: z.string().optional().default("3000"),
   NODE_ENV: z.string().optional(),
+  // Directory where persistent Notify data is stored (survives restarts when
+  // mounted as a Docker volume). Defaults to ./data.
+  DATA_DIR: z.string().optional(),
+  // In production, path to the built webapp to serve from the backend.
+  STATIC_DIR: z.string().optional(),
+  // Optional override for the Telegram bot token.
+  TELEGRAM_BOT_TOKEN: z.string().optional(),
 });
 
 /**

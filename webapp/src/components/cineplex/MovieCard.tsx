@@ -1,7 +1,9 @@
 import { useState } from "react";
-import { Clock, Calendar, Film, ExternalLink } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Clock, Calendar, Film, ExternalLink, Bell } from "lucide-react";
 import type { Movie } from "../../../../backend/src/types";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 function releaseYear(date?: string | null): string | null {
@@ -11,9 +13,17 @@ function releaseYear(date?: string | null): string | null {
 }
 
 export function MovieCard({ movie }: { movie: Movie }) {
+  const navigate = useNavigate();
   const [imgFailed, setImgFailed] = useState(false);
   const hasPoster = Boolean(movie.mediumPosterImageUrl) && !imgFailed;
   const year = releaseYear(movie.releaseDate);
+
+  const handleNotify = (e: React.MouseEvent) => {
+    // Don't trigger the outer link to the Cineplex detail page.
+    e.preventDefault();
+    e.stopPropagation();
+    navigate(`/?tab=notify&filmId=${movie.id}`);
+  };
 
   const Wrapper: React.ElementType = movie.detailPageUrl ? "a" : "div";
   const wrapperProps = movie.detailPageUrl
@@ -98,6 +108,17 @@ export function MovieCard({ movie }: { movie: Movie }) {
             ))}
           </div>
         ) : null}
+
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={handleNotify}
+          className="mt-1 w-full gap-1.5 border-primary/40 text-xs hover:bg-primary/10 hover:text-primary"
+        >
+          <Bell className="h-3.5 w-3.5" />
+          Notify me
+        </Button>
       </div>
     </Wrapper>
   );

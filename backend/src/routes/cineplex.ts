@@ -1,22 +1,6 @@
 import { Hono } from "hono";
 import { MovieSchema, TheatreSchema, type Movie, type Theatre } from "../types";
-
-const CINEPLEX_KEY = "dcdac5601d864addbc2675a2e96cb1f8"; // public key from cineplex.com website JS
-
-async function cineplex(path: string): Promise<unknown> {
-  const res = await fetch(`https://apis.cineplex.com/prod/cpx/theatrical/api/v1/${path}`, {
-    headers: {
-      "Ocp-Apim-Subscription-Key": CINEPLEX_KEY,
-      "accept": "*/*",
-      "origin": "https://www.cineplex.com",
-      "referer": "https://www.cineplex.com/",
-      "user-agent":
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
-    },
-  });
-  if (!res.ok) throw new Error(`Cineplex ${path} -> ${res.status}`);
-  return res.json();
-}
+import { cineplex, fetchBookableDates, fetchShowtimes } from "../lib/cineplex";
 
 const cineplexRouter = new Hono();
 
@@ -114,11 +98,41 @@ cineplexRouter.get("/dates", async (c) => {
   }
 
   try {
-    const raw = (await cineplex(
-      `dates/bookable?filmId=${filmId}&locationId=${locationId}`
-    )) as unknown;
-    const dates: string[] = Array.isArray(raw) ? raw.filter((d): d is string => typeof d === "string") : [];
+    const dates = await fetchBookableDates(Number(filmId), Number(locationId));
     return c.json({ data: dates });
+  } catch (e) {
+    return c.json(upstreamError(e), 502);
+  }
+});
+
+// GET /api/cineplex/showtimes?filmId=..&locationId=..&date=YYYY-MM-DD
+cineplexRouter.get("/showtimes", async (c) => {
+  const filmId = c.req.query("filmId");
+  const locationId = c.req.query("locationId");
+  const date = c.req.query("date");
+
+  if (
+    !filmId ||
+    !locationId ||
+    !date ||
+    !/^\d+$/.test(filmId) ||
+    !/^\d+$/.test(locationId) ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(date)
+  ) {
+    return c.json(
+      {
+        error: {
+          message: "filmId, locationId (numeric) and date (YYYY-MM-DD) are required",
+          code: "INVALID_QUERY" as const,
+        },
+      },
+      400
+    );
+  }
+
+  try {
+    const sessions = await fetchShowtimes(Number(filmId), Number(locationId), date);
+    return c.json({ data: sessions });
   } catch (e) {
     return c.json(upstreamError(e), 502);
   }
