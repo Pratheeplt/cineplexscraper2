@@ -1,16 +1,10 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Clock, Calendar, Film, ExternalLink, Bell, Ticket } from "lucide-react";
+import { Clock, Calendar, Film, ExternalLink, Bell, Ticket, MapPin } from "lucide-react";
 import type { Movie } from "../../../../backend/src/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-
-function releaseYear(date?: string | null): string | null {
-  if (!date) return null;
-  const year = new Date(date).getFullYear();
-  return Number.isNaN(year) ? null : String(year);
-}
 
 // Full readable release date, e.g. "Jul 31, 2026". Null if unparseable.
 function releaseDateLabel(date?: string | null): string | null {
@@ -20,11 +14,16 @@ function releaseDateLabel(date?: string | null): string | null {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-export function MovieCard({ movie }: { movie: Movie }) {
+export function MovieCard({
+  movie,
+  theatreName = null,
+}: {
+  movie: Movie;
+  theatreName?: string | null;
+}) {
   const navigate = useNavigate();
   const [imgFailed, setImgFailed] = useState(false);
   const hasPoster = Boolean(movie.mediumPosterImageUrl) && !imgFailed;
-  const year = releaseYear(movie.releaseDate);
   const fullReleaseDate = releaseDateLabel(movie.releaseDate);
 
   const handleNotify = (e: React.MouseEvent) => {
@@ -75,7 +74,7 @@ export function MovieCard({ movie }: { movie: Movie }) {
           ) : null}
           {/* Banner sits right underneath the Coming Soon badge. */}
           {movie.hasAdvanceTickets ? (
-            <Badge className="gap-1 bg-emerald-500 text-white shadow">
+            <Badge className="gap-1 bg-blue-600 text-white shadow hover:bg-blue-600">
               <Ticket className="h-3 w-3" />
               Advance tickets
             </Badge>
@@ -103,19 +102,22 @@ export function MovieCard({ movie }: { movie: Movie }) {
               {movie.runtimeInMinutes} min
             </span>
           ) : null}
-          {/* Coming Soon films show the full release date; others just the year. */}
-          {movie.isComingSoon && fullReleaseDate ? (
-            <span className="inline-flex items-center gap-1 font-medium text-accent-foreground/90">
+          {/* Full release date shown for every movie. */}
+          {fullReleaseDate ? (
+            <span className="inline-flex items-center gap-1 font-medium text-foreground/80">
               <Calendar className="h-3 w-3" />
               {fullReleaseDate}
             </span>
-          ) : year ? (
-            <span className="inline-flex items-center gap-1">
-              <Calendar className="h-3 w-3" />
-              {year}
-            </span>
           ) : null}
         </div>
+
+        {/* When filtering by a theatre, show which theatre this movie plays at. */}
+        {theatreName ? (
+          <span className="inline-flex items-center gap-1 text-xs text-primary">
+            <MapPin className="h-3 w-3 shrink-0" />
+            <span className="truncate">{theatreName}</span>
+          </span>
+        ) : null}
 
         {movie.genres.length > 0 ? (
           <div className="flex flex-wrap gap-1">

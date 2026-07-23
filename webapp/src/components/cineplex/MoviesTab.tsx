@@ -1,19 +1,14 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Film, Globe } from "lucide-react";
+import { Film, Globe, Ticket } from "lucide-react";
 import type { Movie, Theatre } from "../../../../backend/src/types";
 import { api } from "@/lib/api";
+import { usePersistentState } from "@/hooks/use-persistent-state";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { MovieCard } from "./MovieCard";
+import { TheatreCombobox, ALL_THEATRES } from "./TheatreCombobox";
 import { MovieGridSkeleton, ErrorState, EmptyState } from "./StateViews";
 
 type MovieFilter = "all" | "now-playing" | "coming-soon";
@@ -23,8 +18,6 @@ const FILTERS: { value: MovieFilter; label: string }[] = [
   { value: "now-playing", label: "Now Playing" },
   { value: "coming-soon", label: "Coming Soon" },
 ];
-
-const ALL_THEATRES = "all";
 
 function fetchMovies(filter: MovieFilter): Promise<Movie[]> {
   const query = filter === "all" ? "" : `?filter=${filter}`;
@@ -55,9 +48,14 @@ function byReleaseDateAsc(a: Movie, b: Movie): number {
 }
 
 export function MoviesTab() {
-  const [filter, setFilter] = useState<MovieFilter>("all");
-  const [theatreId, setTheatreId] = useState<string>(ALL_THEATRES);
-  const [hideInternational, setHideInternational] = useState<boolean>(false);
+  // Filters persist to localStorage so they're restored on the next visit.
+  const [filter, setFilter] = usePersistentState<MovieFilter>("movies.filter", "all");
+  const [theatreId, setTheatreId] = usePersistentState<string>("movies.theatreId", ALL_THEATRES);
+  const [hideInternational, setHideInternational] = usePersistentState<boolean>(
+    "movies.hideInternational",
+    false
+  );
+  const [advanceOnly, setAdvanceOnly] = usePersistentState<boolean>("movies.advanceOnly", false);
 
   const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ["cineplex", "movies", filter],
@@ -76,10 +74,14 @@ export function MoviesTab() {
     enabled: theatreId !== ALL_THEATRES,
   });
 
+  const theatreList = theatres ?? [];
+  const selectedTheatre = theatreList.find((t) => String(t.theatreId) === theatreId);
+
   const movies = useMemo(() => {
     let list = data ?? [];
 
     if (hideInternational) list = list.filter(isEnglish);
+    if (advanceOnly) list = list.filter((m) => m.hasAdvanceTickets);
 
     if (theatreId !== ALL_THEATRES && theatreFilmIds) {
       const allowed = new Set(theatreFilmIds);
@@ -87,7 +89,7 @@ export function MoviesTab() {
     }
 
     return [...list].sort(byReleaseDateAsc);
-  }, [data, hideInternational, theatreId, theatreFilmIds]);
+  }, [data, hideInternational, advanceOnly, theatreId, theatreFilmIds]);
 
   const filteringByTheatre = theatreId !== ALL_THEATRES;
   // While a theatre's film list is still loading, show skeletons not a wrong count.
@@ -127,37 +129,33 @@ export function MoviesTab() {
         </p>
       </div>
 
-      {/* Secondary filters: theatre + hide international */}
-      <div className="flex flex-col gap-3 rounded-lg border border-border bg-card/50 p-3 sm:flex-row sm:items-center sm:justify-between">
+      {/* Secondary filters: theatre search + toggles */}
+      <div className="flex flex-col gap-4 rounded-lg border border-border bg-card/50 p-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-center gap-2">
-          <Label htmlFor="theatre-filter" className="shrink-0 text-sm text-muted-foreground">
-            Theatre
-          </Label>
-          <Select value={theatreId} onValueChange={setTheatreId}>
-            <SelectTrigger id="theatre-filter" className="w-full sm:w-[280px]">
-              <SelectValue placeholder="All theatres" />
-            </SelectTrigger>
-            <SelectContent className="max-h-[300px]">
-              <SelectItem value={ALL_THEATRES}>All theatres</SelectItem>
-              {(theatres ?? []).map((t) => (
-                <SelectItem key={t.theatreId} value={String(t.theatreId)}>
-                  {t.theatreName}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Label className="shrink-0 text-sm text-muted-foreground">Theatre</Label>
+          <TheatreCombobox theatres={theatreList} value={theatreId} onChange={setTheatreId} />
         </div>
 
-        <div className="flex items-center gap-2">
-          <Globe className="h-4 w-4 text-muted-foreground" />
-          <Label htmlFor="hide-intl" className="cursor-pointer text-sm text-muted-foreground">
-            Hide international movies
-          </Label>
-          <Switch
-            id="hide-intl"
-            checked={hideInternational}
-            onCheckedChange={setHideInternational}
-          />
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-5">
+          <div className="flex items-center gap-2">
+            <Globe className="h-4 w-4 text-muted-foreground" />
+            <Label htmlFor="hide-intl" className="cursor-pointer text-sm text-muted-foreground">
+              Hide international
+            </Label>
+            <Switch
+              id="hide-intl"
+              checked={hideInternational}
+              onCheckedChange={setHideInternational}
+            />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Ticket className="h-4 w-4 text-blue-500" />
+            <Label htmlFor="advance-only" className="cursor-pointer text-sm text-muted-foreground">
+              Advance tickets only
+            </Label>
+            <Switch id="advance-only" checked={advanceOnly} onCheckedChange={setAdvanceOnly} />
+          </div>
         </div>
       </div>
 
@@ -176,7 +174,11 @@ export function MoviesTab() {
       ) : (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
           {movies.map((movie) => (
-            <MovieCard key={movie.id} movie={movie} />
+            <MovieCard
+              key={movie.id}
+              movie={movie}
+              theatreName={selectedTheatre?.theatreName ?? null}
+            />
           ))}
         </div>
       )}
