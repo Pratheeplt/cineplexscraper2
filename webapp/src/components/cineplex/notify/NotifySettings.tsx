@@ -63,6 +63,31 @@ export function NotifySettings() {
 
   const connected = settings?.telegramConnected ?? false;
 
+  // Every settings change is sent as a FULL, self-contained snapshot (all the
+  // current values, with the one being changed overridden). That way a single
+  // PATCH can never drop another field — toggling an alert can't wipe the chat
+  // ID, the interval, or the other alert. The raw bot token is never sent here
+  // (it's write-only + preserved server-side), so it's omitted unless the user
+  // explicitly enters a new one via handleSaveTelegram.
+  const patchSettings = (
+    patch: NotifySettingsPatch,
+    options?: Parameters<typeof update.mutate>[1]
+  ) => {
+    update.mutate(
+      {
+        enabled: settings?.enabled ?? true,
+        intervalMinutes: settings?.intervalMinutes ?? 30,
+        catalogEnabled: settings?.catalogEnabled ?? true,
+        catalogIntervalMinutes: settings?.catalogIntervalMinutes ?? 60,
+        notifyAdvanceTickets: settings?.notifyAdvanceTickets ?? false,
+        notifyFavoriteDates: settings?.notifyFavoriteDates ?? false,
+        telegramChatId: settings?.telegramChatId ?? "",
+        ...patch,
+      },
+      options
+    );
+  };
+
   // Local form state for the manual Telegram credentials. The token field
   // always starts empty (we never receive the raw token back); the chat id is
   // pre-filled from the saved value.
@@ -77,14 +102,14 @@ export function NotifySettings() {
   }
 
   const handleSaveTelegram = () => {
-    // Send both fields in ONE PATCH to dodge the dev-mode reload race.
+    // Full self-contained snapshot with the new chat id (and token, if typed).
     const patch: NotifySettingsPatch = { telegramChatId: chatId.trim() };
     const token = botToken.trim();
     // Only include the token when the user typed one — an empty field must NOT
     // overwrite the already-saved token.
     if (token.length > 0) patch.telegramBotToken = token;
 
-    update.mutate(patch, {
+    patchSettings(patch, {
       onSuccess: () => {
         setBotToken("");
         toast({ title: "Telegram settings saved" });
@@ -113,7 +138,7 @@ export function NotifySettings() {
           <Switch
             id="notify-enabled"
             checked={settings?.enabled ?? false}
-            onCheckedChange={(v) => update.mutate({ enabled: v })}
+            onCheckedChange={(v) => patchSettings({ enabled: v })}
           />
         </div>
 
@@ -125,7 +150,7 @@ export function NotifySettings() {
           </div>
           <Select
             value={String(settings?.intervalMinutes ?? 30)}
-            onValueChange={(v) => update.mutate({ intervalMinutes: Number(v) })}
+            onValueChange={(v) => patchSettings({ intervalMinutes: Number(v) })}
           >
             <SelectTrigger className="w-[150px]">
               <SelectValue />
@@ -157,7 +182,7 @@ export function NotifySettings() {
         <Switch
           id="notify-advance"
           checked={settings?.notifyAdvanceTickets ?? false}
-          onCheckedChange={(v) => update.mutate({ notifyAdvanceTickets: v })}
+          onCheckedChange={(v) => patchSettings({ notifyAdvanceTickets: v })}
         />
       </div>
 
@@ -178,7 +203,7 @@ export function NotifySettings() {
         <Switch
           id="notify-favorite-dates"
           checked={settings?.notifyFavoriteDates ?? false}
-          onCheckedChange={(v) => update.mutate({ notifyFavoriteDates: v })}
+          onCheckedChange={(v) => patchSettings({ notifyFavoriteDates: v })}
         />
       </div>
 
@@ -200,7 +225,7 @@ export function NotifySettings() {
             <Switch
               id="catalog-enabled"
               checked={settings?.catalogEnabled ?? false}
-              onCheckedChange={(v) => update.mutate({ catalogEnabled: v })}
+              onCheckedChange={(v) => patchSettings({ catalogEnabled: v })}
             />
           </div>
           <div className="flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-card px-3 py-2.5">
@@ -210,7 +235,7 @@ export function NotifySettings() {
             </div>
             <Select
               value={String(settings?.catalogIntervalMinutes ?? 60)}
-              onValueChange={(v) => update.mutate({ catalogIntervalMinutes: Number(v) })}
+              onValueChange={(v) => patchSettings({ catalogIntervalMinutes: Number(v) })}
             >
               <SelectTrigger className="w-[150px]">
                 <SelectValue />

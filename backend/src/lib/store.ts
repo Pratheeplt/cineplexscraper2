@@ -78,8 +78,13 @@ function readFromDisk(): StoreShape | null {
   try {
     if (!existsSync(FILE)) return null;
     const raw = JSON.parse(readFileSync(FILE, "utf8"));
+    const settings = SettingsSchema.parse(raw.settings ?? {});
+    // The app ships with a default bot, so an empty stored token always falls
+    // back to it. This guarantees the token is never effectively lost by a
+    // save that omits it (e.g. toggling an alert). A user-saved token wins.
+    if (!settings.telegramBotToken) settings.telegramBotToken = DEFAULT_BOT_TOKEN;
     return {
-      settings: SettingsSchema.parse(raw.settings ?? {}),
+      settings,
       watches: Array.isArray(raw.watches)
         ? raw.watches.map((w: unknown) => WatchSchema.parse(w))
         : [],
@@ -176,6 +181,7 @@ export function getWatch(id: string): Watch | undefined {
 }
 
 export function addWatch(w: Watch): Watch {
+  syncFromDisk();
   state.watches.unshift(w);
   persist();
   return { ...w };
@@ -189,6 +195,7 @@ export function watchExists(filmId: number, locationId: number, date: string): b
 }
 
 export function updateWatch(id: string, patch: Partial<Watch>): Watch | undefined {
+  syncFromDisk();
   const idx = state.watches.findIndex((w) => w.id === id);
   const current = idx === -1 ? undefined : state.watches[idx];
   if (!current) return undefined;
@@ -199,6 +206,7 @@ export function updateWatch(id: string, patch: Partial<Watch>): Watch | undefine
 }
 
 export function deleteWatch(id: string): boolean {
+  syncFromDisk();
   const before = state.watches.length;
   state.watches = state.watches.filter((w) => w.id !== id);
   delete state.seen[id];
@@ -213,6 +221,7 @@ export function getSeen(watchId: string): Set<number> {
 }
 
 export function setSeen(watchId: string, ids: Iterable<number>): void {
+  syncFromDisk();
   state.seen[watchId] = Array.from(new Set(ids));
   persist();
 }
@@ -224,6 +233,7 @@ export function getHistory(limit = 100): HistoryEntry[] {
 
 export function addHistory(entries: HistoryEntry[]): void {
   if (entries.length === 0) return;
+  syncFromDisk();
   state.history.unshift(...entries);
   if (state.history.length > HISTORY_CAP) state.history.length = HISTORY_CAP;
   persist();
@@ -239,6 +249,7 @@ export function isCatalogInitialized(): boolean {
 }
 
 export function setCatalog(catalog: Record<string, CatalogEntry>): void {
+  syncFromDisk();
   state.catalog = catalog;
   persist();
 }
@@ -250,6 +261,7 @@ export function getActivity(limit = 200): ActivityEvent[] {
 
 export function addActivity(entries: ActivityEvent[]): void {
   if (entries.length === 0) return;
+  syncFromDisk();
   state.activity.unshift(...entries);
   if (state.activity.length > ACTIVITY_CAP) state.activity.length = ACTIVITY_CAP;
   persist();
@@ -257,6 +269,7 @@ export function addActivity(entries: ActivityEvent[]): void {
 
 // ---- Favorites ------------------------------------------------------------
 export function getFavorites(): Favorites {
+  syncFromDisk();
   return {
     movies: state.favorites.movies.map((m) => ({ ...m })),
     theatres: state.favorites.theatres.map((t) => ({ ...t })),
@@ -264,12 +277,14 @@ export function getFavorites(): Favorites {
 }
 
 export function setFavoriteMovies(movies: FavoriteMovie[]): Favorites {
+  syncFromDisk();
   state.favorites.movies = movies.map((m) => FavoriteMovieSchema.parse(m));
   persist();
   return getFavorites();
 }
 
 export function setFavoriteTheatres(theatres: FavoriteTheatre[]): Favorites {
+  syncFromDisk();
   state.favorites.theatres = theatres.map((t) => FavoriteTheatreSchema.parse(t));
   persist();
   return getFavorites();
@@ -283,6 +298,7 @@ export function getFavSeenDates(key: string): string[] | undefined {
 }
 
 export function setFavSeenDates(key: string, dates: string[]): void {
+  syncFromDisk();
   state.favSeenDates[key] = dates;
   persist();
 }
