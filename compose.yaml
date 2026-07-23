@@ -1,0 +1,31 @@
+services:
+  cineplexscraper2:
+    build: .
+    image: cineplexscraper
+    container_name: cineplexscraper
+    restart: unless-stopped
+    environment:
+      - PORT=8080
+      - DATA_DIR=/app/data
+      # Optional: override the Telegram bot token (defaults to the built-in one).
+      - TELEGRAM_BOT_TOKEN=8847611911:AAEXmXTMRNG8V3qUsVdZ0bPQZDk_I-lsBqQ
+    volumes:
+      # Persists watches, history and settings across restarts / redeploys.
+      - cineplex_data:/app/data
+    # Publish the app on port 8080 of your VPS. Open http://<your-vps-ip>:8080
+    # Change the left number to use a different host port (e.g. "80:8080").
+    ports:
+      - "8080:8080"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.cineplexscraper.rule=Host(`${CINEPLEXSCRAPER_HOSTNAME?}`)"
+      - "traefik.http.routers.cineplexscraper.entrypoints=websecure"
+      - "traefik.http.routers.cineplexscraper.tls.certresolver=letsencrypt"
+      - "traefik.http.services.cineplexscraper.loadbalancer.server.port=8080"
+      - "traefik.http.routers.cineplexscraper.middlewares=authelia@docker"
+    profiles:
+      - cineplexscraper
+      - all
+
+volumes:
+  cineplex_data:
