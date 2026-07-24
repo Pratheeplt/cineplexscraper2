@@ -6,6 +6,7 @@ import {
   WatchSchema,
   FavoriteMovieSchema,
   FavoriteTheatreSchema,
+  WatchedMovieSchema,
   type Watch,
 } from "../types";
 import {
@@ -21,6 +22,8 @@ import {
   getFavorites,
   setFavoriteMovies,
   setFavoriteTheatres,
+  getWatchedMovies,
+  setWatchedMovies,
 } from "../lib/store";
 import {
   checkWatch,
@@ -184,6 +187,24 @@ notifyRouter.put("/favorites/theatres", async (c) => {
   }
   setFavoriteTheatres(parsed.data.theatres);
   return c.json({ data: getFavorites() });
+});
+
+// ---- Watched movies -------------------------------------------------------
+
+// GET /api/notify/watched
+notifyRouter.get("/watched", (c) => {
+  return c.json({ data: getWatchedMovies() });
+});
+
+// PUT /api/notify/watched — replace the full watched list
+notifyRouter.put("/watched", async (c) => {
+  const body = await c.req.json().catch(() => null);
+  const parsed = z.object({ movies: z.array(WatchedMovieSchema) }).safeParse(body);
+  if (!parsed.success) {
+    return c.json(badRequest(parsed.error.issues[0]?.message ?? "Invalid watched list"), 400);
+  }
+  setWatchedMovies(parsed.data.movies);
+  return c.json({ data: getWatchedMovies() });
 });
 
 // ---- Settings -------------------------------------------------------------

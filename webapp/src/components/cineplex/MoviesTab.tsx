@@ -1,11 +1,12 @@
 import { useMemo } from "react";
 import { useQuery, useQueries, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Film, Globe, Ticket, Search, Star } from "lucide-react";
+import { Film, Globe, Ticket, Search, Star, Eye } from "lucide-react";
 import type { Movie, Theatre } from "../../../../backend/src/types";
 import { api } from "@/lib/api";
 import { notifyApi, type NotifySettings } from "@/lib/notifyApi";
 import { usePersistentState } from "@/hooks/use-persistent-state";
 import { useFavoriteTheatres } from "@/hooks/use-favorite-theatres";
+import { useWatchedMovies } from "@/hooks/use-watched-movies";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -58,10 +59,13 @@ export function MoviesTab() {
   const [theatreId, setTheatreId] = usePersistentState<string>("movies.theatreId", ALL_THEATRES);
   const [advanceOnly, setAdvanceOnly] = usePersistentState<boolean>("movies.advanceOnly", false);
   const [favoritesOnly, setFavoritesOnly] = usePersistentState<boolean>("movies.favoritesOnly", false);
+  const [showWatched, setShowWatched] = usePersistentState<boolean>("movies.showWatched", false);
   const [search, setSearch] = usePersistentState<string>("movies.search", "");
   const [genres, setGenres] = usePersistentState<string[]>("movies.genres", []);
 
   const { favorites } = useFavoriteTheatres();
+  const { watched } = useWatchedMovies();
+  const watchedIds = useMemo(() => new Set(watched.map((m) => m.filmId)), [watched]);
   const queryClient = useQueryClient();
 
   // "Hide international" is a shared backend setting so it applies everywhere:
@@ -91,9 +95,15 @@ export function MoviesTab() {
     },
   });
 
+  // Keep the movie list fresh: always refetch on mount / focus and poll every
+  // 3 minutes so movies pulled from (or removed from) Cineplex show up promptly.
   const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ["cineplex", "movies", filter],
     queryFn: () => fetchMovies(filter),
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+    refetchInterval: 3 * 60_000,
   });
 
   const { data: theatres } = useQuery({
@@ -137,6 +147,12 @@ export function MoviesTab() {
     const q = search.trim().toLowerCase();
     if (q) list = list.filter((m) => m.name.toLowerCase().includes(q));
 
+    // Watched movies are hidden by default; "Show watched" flips to only those
+    // so the user can review and unwatch them.
+    list = showWatched
+      ? list.filter((m) => watchedIds.has(m.id))
+      : list.filter((m) => !watchedIds.has(m.id));
+
     if (hideInternational) list = list.filter(isEnglish);
     if (advanceOnly) list = list.filter((m) => m.hasAdvanceTickets);
 
@@ -170,6 +186,8 @@ export function MoviesTab() {
     favoritesOnly,
     favorites,
     favFilmKey,
+    showWatched,
+    watchedIds,
   ]);
 
   const filteringByTheatre = theatreId !== ALL_THEATRES;
@@ -242,6 +260,14 @@ export function MoviesTab() {
             </Label>
             <Switch id="fav-only" checked={favoritesOnly} onCheckedChange={setFavoritesOnly} />
           </div>
+
+          <div className="flex items-center gap-2 sm:pl-1">
+            <Eye className={cn("h-4 w-4", showWatched ? "text-primary" : "text-muted-foreground")} />
+            <Label htmlFor="show-watched" className="cursor-pointer whitespace-nowrap text-sm text-muted-foreground">
+              Show watched{watched.length > 0 ? ` (${watched.length})` : ""}
+            </Label>
+            <Switch id="show-watched" checked={showWatched} onCheckedChange={setShowWatched} />
+          </div>
         </div>
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-5">
@@ -279,11 +305,13 @@ export function MoviesTab() {
       ) : movies.length === 0 ? (
         <EmptyState
           message={
-            search
-              ? "No movies match your search and filters."
-              : filteringByTheatre || favoritesOnly
-                ? "No movies match your selected theatres and filters."
-                : "No movies found for this filter."
+            showWatched
+              ? "You haven't marked any movies as watched yet. Tap the eye icon on a movie to hide it here."
+              : search
+                ? "No movies match your search and filters."
+                : filteringByTheatre || favoritesOnly
+                  ? "No movies match your selected theatres and filters."
+                  : "No movies found for this filter."
           }
         />
       ) : (

@@ -6,9 +6,18 @@ import type {
   ActivityEvent,
   FavoriteMovie,
   FavoriteTheatre,
+  WatchedMovie,
 } from "../../../backend/src/types";
 
-export type { Watch, HistoryEntry, ShowSession, ActivityEvent, FavoriteMovie, FavoriteTheatre };
+export type {
+  Watch,
+  HistoryEntry,
+  ShowSession,
+  ActivityEvent,
+  FavoriteMovie,
+  FavoriteTheatre,
+  WatchedMovie,
+};
 
 export interface NotifySettings {
   enabled: boolean;
@@ -94,4 +103,8 @@ export const notifyApi = {
     api.put<Favorites>("/api/notify/favorites/movies", { movies }),
   setFavoriteTheatres: (theatres: FavoriteTheatre[]) =>
     api.put<Favorites>("/api/notify/favorites/theatres", { theatres }),
+
+  getWatchedMovies: () => api.get<WatchedMovie[]>("/api/notify/watched"),
+  setWatchedMovies: (movies: WatchedMovie[]) =>
+    api.put<WatchedMovie[]>("/api/notify/watched", { movies }),
 };

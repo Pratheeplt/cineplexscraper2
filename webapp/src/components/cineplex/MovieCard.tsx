@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Clock, Calendar, Film, ExternalLink, Bell, Ticket, MapPin, Heart } from "lucide-react";
+import { Clock, Calendar, Film, ExternalLink, Bell, Ticket, MapPin, Heart, Eye, EyeOff } from "lucide-react";
 import type { Movie } from "../../../../backend/src/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useFavoriteMovies } from "@/hooks/use-favorite-movies";
+import { useWatchedMovies } from "@/hooks/use-watched-movies";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { PosterDatesOverlay } from "./PosterDatesOverlay";
@@ -31,6 +32,7 @@ export function MovieCard({
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const { isFavorite, toggle } = useFavoriteMovies();
+  const { isWatched, toggle: toggleWatched } = useWatchedMovies();
   const [imgFailed, setImgFailed] = useState(false);
   const [hovered, setHovered] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -38,6 +40,17 @@ export function MovieCard({
   const hasPoster = Boolean(movie.mediumPosterImageUrl) && !imgFailed;
   const fullReleaseDate = releaseDateLabel(movie.releaseDate);
   const favorited = isFavorite(movie.id);
+  const watched = isWatched(movie.id);
+
+  const handleWatched = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    toggleWatched({
+      filmId: movie.id,
+      filmName: movie.name,
+      posterUrl: movie.mediumPosterImageUrl ?? null,
+    });
+  };
 
   const handleFavorite = (e: React.MouseEvent) => {
     // Don't open the detail modal (or the Cineplex link) when favoriting.
@@ -191,16 +204,30 @@ export function MovieCard({
             </div>
           ) : null}
 
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={handleNotify}
-            className="mt-1 w-full gap-1.5 border-primary/40 text-xs hover:bg-primary/10 hover:text-primary"
-          >
-            <Bell className="h-3.5 w-3.5" />
-            Notify me
-          </Button>
+          <div className="mt-1 flex items-stretch gap-1.5">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={handleNotify}
+              className="flex-1 gap-1.5 border-primary/40 text-xs hover:bg-primary/10 hover:text-primary"
+            >
+              <Bell className="h-3.5 w-3.5" />
+              Notify me
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={watched ? "secondary" : "outline"}
+              onClick={handleWatched}
+              aria-pressed={watched}
+              aria-label={watched ? "Unwatch (show it again)" : "Mark as watched (hide it)"}
+              title={watched ? "Unwatch — show it in the list again" : "Mark as watched — hides it from the list"}
+              className="shrink-0 px-2.5"
+            >
+              {watched ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+            </Button>
+          </div>
         </div>
       </div>
 

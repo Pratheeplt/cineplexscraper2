@@ -1,11 +1,12 @@
 import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { Theatre } from "../../../../backend/src/types";
-import type { FavoriteMovie, FavoriteTheatre } from "@/lib/notifyApi";
+import type { FavoriteMovie, FavoriteTheatre, WatchedMovie } from "@/lib/notifyApi";
 import { api } from "@/lib/api";
 import { notifyApi } from "@/lib/notifyApi";
 import { useFavoriteTheatres, hydrateFavoriteTheatres } from "@/hooks/use-favorite-theatres";
 import { useFavoriteMovies, hydrateFavoriteMovies } from "@/hooks/use-favorite-movies";
+import { useWatchedMovies, hydrateWatchedMovies } from "@/hooks/use-watched-movies";
 
 function fetchTheatres(): Promise<Theatre[]> {
   return api.get<Theatre[]>("/api/cineplex/theatres");
@@ -31,6 +32,7 @@ function theatresKey(list: FavoriteTheatre[]): string {
 export function FavoritesSync() {
   const { favorites: favoriteTheatreIds } = useFavoriteTheatres();
   const { favorites: favoriteMovies } = useFavoriteMovies();
+  const { watched: watchedMovies } = useWatchedMovies();
 
   const { data: theatres } = useQuery({
     queryKey: ["cineplex", "theatres"],
@@ -42,10 +44,17 @@ export function FavoritesSync() {
     queryFn: () => notifyApi.getFavorites(),
   });
 
+  const { data: serverWatched } = useQuery({
+    queryKey: ["notify", "watched"],
+    queryFn: () => notifyApi.getWatchedMovies(),
+  });
+
   // Has the local store been reconciled with the backend copy yet?
   const hydrated = useRef(false);
   // Last theatre payload pushed to the backend — dedupes redundant PUTs.
   const lastTheatresKey = useRef<string | null>(null);
+  // Has the watched list been reconciled with the backend copy yet?
+  const watchedHydrated = useRef(false);
 
   // Reconcile once: union of local + backend becomes the truth on both sides.
   useEffect(() => {
@@ -86,6 +95,24 @@ export function FavoritesSync() {
       void notifyApi.setFavoriteTheatres(mergedTheatres).catch(() => {});
     }
   }, [serverFavorites, theatres, favoriteMovies, favoriteTheatreIds]);
+
+  // Reconcile the watched list once: union of local + backend on both sides.
+  useEffect(() => {
+    if (watchedHydrated.current) return;
+    if (!serverWatched) return;
+    watchedHydrated.current = true;
+
+    const movieMap = new Map<number, WatchedMovie>();
+    for (const m of watchedMovies) movieMap.set(m.filmId, m);
+    for (const m of serverWatched) movieMap.set(m.filmId, m);
+    const merged = [...movieMap.values()];
+
+    hydrateWatchedMovies(merged);
+    // Only push back when we added something the backend was missing.
+    if (merged.length !== serverWatched.length) {
+      void notifyApi.setWatchedMovies(merged).catch(() => {});
+    }
+  }, [serverWatched, watchedMovies]);
 
   // Push favorite theatres to the backend whenever the resolved list changes.
   // Suppressed until reconciliation completes so we never clobber the server.

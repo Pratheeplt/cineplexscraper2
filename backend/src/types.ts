@@ -124,6 +124,16 @@ export const FavoriteTheatreSchema = z.object({
 });
 export type FavoriteTheatre = z.infer<typeof FavoriteTheatreSchema>;
 
+// A movie the user has already watched. Watched movies are hidden from the
+// movie list but can be "unwatched" to bring them back. Same shape as a
+// favorite movie so the UI can render a poster + name in the "watched" view.
+export const WatchedMovieSchema = z.object({
+  filmId: z.number(),
+  filmName: z.string(),
+  posterUrl: z.string().nullable().optional(),
+});
+export type WatchedMovie = z.infer<typeof WatchedMovieSchema>;
+
 export const FavoritesSchema = z.object({
   movies: z.array(FavoriteMovieSchema).default([]),
   theatres: z.array(FavoriteTheatreSchema).default([]),
@@ -162,6 +172,7 @@ export const ACTIVITY_TYPES = [
   "now_playing", // a film moved from Coming Soon to Now Playing
   "release_date", // a film's release date changed
   "favorite_date", // a new bookable date appeared for a favorited movie
+  "removed_movie", // a film disappeared from the Cineplex catalog
 ] as const;
 
 export const ActivityEventSchema = z.object({

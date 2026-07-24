@@ -143,6 +143,25 @@ export async function scanCatalog(notify: boolean): Promise<ActivityEvent[]> {
     }
   }
 
+  // Movies that were in the previous snapshot but are gone from the API now.
+  // (Skipped on the baseline run, when `prev` is empty anyway.)
+  if (!baseline) {
+    for (const [key, before] of Object.entries(prev)) {
+      if (nextCatalog[key]) continue;
+      events.push({
+        id: newId(),
+        type: "removed_movie",
+        filmId: Number(key),
+        filmName: before.name,
+        posterUrl: null,
+        detail: "Removed from Cineplex",
+        releaseDate: before.releaseDate ?? null,
+        detectedAt: now,
+      });
+      console.log(`[catalog] movie removed from catalog: "${before.name}" (${key})`);
+    }
+  }
+
   setCatalog(nextCatalog);
 
   if (events.length > 0) {

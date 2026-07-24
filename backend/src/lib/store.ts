@@ -11,6 +11,7 @@ import {
   FavoritesSchema,
   FavoriteMovieSchema,
   FavoriteTheatreSchema,
+  WatchedMovieSchema,
   type Settings,
   type Watch,
   type HistoryEntry,
@@ -18,6 +19,7 @@ import {
   type Favorites,
   type FavoriteMovie,
   type FavoriteTheatre,
+  type WatchedMovie,
 } from "../types";
 
 const DATA_DIR = process.env.DATA_DIR || join(process.cwd(), "data");
@@ -52,6 +54,8 @@ interface StoreShape {
   // per favorite film+theatre pair, the last set of bookable dates seen (for
   // diffing). Keyed by `${filmId}_${theatreId}`. Absence = never checked.
   favSeenDates: Record<string, string[]>;
+  // movies the user marked as "watched" (hidden from the list until unwatched)
+  watchedMovies: WatchedMovie[];
 }
 
 function defaults(): StoreShape {
@@ -64,6 +68,7 @@ function defaults(): StoreShape {
     activity: [],
     favorites: FavoritesSchema.parse({}),
     favSeenDates: {},
+    watchedMovies: [],
   };
 }
 
@@ -99,6 +104,9 @@ function readFromDisk(): StoreShape | null {
       favorites: FavoritesSchema.parse(raw.favorites ?? {}),
       favSeenDates:
         typeof raw.favSeenDates === "object" && raw.favSeenDates ? raw.favSeenDates : {},
+      watchedMovies: Array.isArray(raw.watchedMovies)
+        ? raw.watchedMovies.map((m: unknown) => WatchedMovieSchema.parse(m))
+        : [],
     };
   } catch {
     return null;
@@ -301,4 +309,20 @@ export function setFavSeenDates(key: string, dates: string[]): void {
   syncFromDisk();
   state.favSeenDates[key] = dates;
   persist();
+}
+
+// ---- Watched movies -------------------------------------------------------
+export function getWatchedMovies(): WatchedMovie[] {
+  syncFromDisk();
+  return state.watchedMovies.map((m) => ({ ...m }));
+}
+
+export function setWatchedMovies(movies: WatchedMovie[]): WatchedMovie[] {
+  syncFromDisk();
+  // De-dupe by filmId, keeping the last occurrence.
+  const byId = new Map<number, WatchedMovie>();
+  for (const m of movies) byId.set(m.filmId, WatchedMovieSchema.parse(m));
+  state.watchedMovies = [...byId.values()];
+  persist();
+  return getWatchedMovies();
 }

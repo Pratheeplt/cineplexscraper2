@@ -8,6 +8,7 @@ import {
   CalendarPlus,
   RefreshCw,
   Film,
+  Trash2,
 } from "lucide-react";
 import { Armchair, Clock } from "lucide-react";
 import type { ActivityEvent, ShowSession } from "@/lib/notifyApi";
@@ -40,6 +41,11 @@ const TYPE_META: Record<
     label: "New date",
     icon: CalendarPlus,
     className: "bg-accent text-accent-foreground",
+  },
+  removed_movie: {
+    label: "Removed",
+    icon: Trash2,
+    className: "bg-destructive text-destructive-foreground",
   },
 };
 
