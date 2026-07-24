@@ -144,6 +144,9 @@ export const SettingsSchema = z.object({
   // When on, a Telegram alert is sent when a new bookable date appears for a
   // favorite movie at a favorite theatre.
   notifyFavoriteDates: z.boolean().default(false),
+  // When on, non-English (international) movies are hidden everywhere: the
+  // movie list, the Activity feed, and Telegram alerts.
+  hideInternational: z.boolean().default(false),
 });
 export type Settings = z.infer<typeof SettingsSchema>;
 
@@ -169,6 +172,9 @@ export const ActivityEventSchema = z.object({
   posterUrl: z.string().nullable().optional(),
   detail: z.string(), // human-readable summary, e.g. "Advance tickets now on sale"
   releaseDate: z.string().nullable().optional(),
+  // The film's spoken language ("English", "Punjabi", …). Lets the feed hide
+  // international events when the "hide international" setting is on.
+  language: z.string().nullable().optional(),
   // For "favorite_date" events: the specific bookable date that opened plus the
   // showtimes behind it (time, format, seats) so the UI can show real details.
   date: z.string().nullable().optional(),

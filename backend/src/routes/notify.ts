@@ -29,6 +29,7 @@ import {
   scanCatalogNow,
 } from "../lib/scheduler";
 import { sendTelegram, detectChatId } from "../lib/telegram";
+import { isEnglishLanguage } from "../lib/cineplex";
 
 const notifyRouter = new Hono();
 
@@ -135,6 +136,14 @@ notifyRouter.get("/history", (c) => {
 // GET /api/notify/activity?limit=200
 notifyRouter.get("/activity", (c) => {
   const limit = Number(c.req.query("limit")) || 200;
+  // When "hide international" is on, drop non-English events from the feed.
+  // Events with no recorded language (e.g. favourite-date alerts) are kept.
+  if (getSettings().hideInternational) {
+    const filtered = getActivity(500).filter(
+      (e) => e.language == null || isEnglishLanguage(e.language)
+    );
+    return c.json({ data: filtered.slice(0, limit) });
+  }
   return c.json({ data: getActivity(limit) });
 });
 
@@ -189,6 +198,7 @@ function publicSettings() {
     catalogIntervalMinutes: s.catalogIntervalMinutes,
     notifyAdvanceTickets: s.notifyAdvanceTickets,
     notifyFavoriteDates: s.notifyFavoriteDates,
+    hideInternational: s.hideInternational,
     hasBotToken: Boolean(s.telegramBotToken),
     telegramChatId: s.telegramChatId,
     telegramConnected: Boolean(s.telegramBotToken && s.telegramChatId),

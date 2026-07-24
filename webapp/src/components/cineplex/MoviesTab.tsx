@@ -1,8 +1,9 @@
 import { useMemo } from "react";
-import { useQuery, useQueries } from "@tanstack/react-query";
+import { useQuery, useQueries, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Film, Globe, Ticket, Search, Star } from "lucide-react";
 import type { Movie, Theatre } from "../../../../backend/src/types";
 import { api } from "@/lib/api";
+import { notifyApi, type NotifySettings } from "@/lib/notifyApi";
 import { usePersistentState } from "@/hooks/use-persistent-state";
 import { useFavoriteTheatres } from "@/hooks/use-favorite-theatres";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -55,16 +56,40 @@ export function MoviesTab() {
   // Filters persist to localStorage so they're restored on the next visit.
   const [filter, setFilter] = usePersistentState<MovieFilter>("movies.filter", "all");
   const [theatreId, setTheatreId] = usePersistentState<string>("movies.theatreId", ALL_THEATRES);
-  const [hideInternational, setHideInternational] = usePersistentState<boolean>(
-    "movies.hideInternational",
-    false
-  );
   const [advanceOnly, setAdvanceOnly] = usePersistentState<boolean>("movies.advanceOnly", false);
   const [favoritesOnly, setFavoritesOnly] = usePersistentState<boolean>("movies.favoritesOnly", false);
   const [search, setSearch] = usePersistentState<string>("movies.search", "");
   const [genres, setGenres] = usePersistentState<string[]>("movies.genres", []);
 
   const { favorites } = useFavoriteTheatres();
+  const queryClient = useQueryClient();
+
+  // "Hide international" is a shared backend setting so it applies everywhere:
+  // the movie list, the Activity feed, and Telegram alerts.
+  const { data: settings } = useQuery({
+    queryKey: ["notify", "settings"],
+    queryFn: notifyApi.getSettings,
+  });
+  const hideInternational = settings?.hideInternational ?? false;
+
+  const setHideInternational = useMutation({
+    mutationFn: (v: boolean) => notifyApi.updateSettings({ hideInternational: v }),
+    // Optimistically flip the switch so the UI responds instantly.
+    onMutate: async (v: boolean) => {
+      await queryClient.cancelQueries({ queryKey: ["notify", "settings"] });
+      const prev = queryClient.getQueryData<NotifySettings>(["notify", "settings"]);
+      if (prev) queryClient.setQueryData(["notify", "settings"], { ...prev, hideInternational: v });
+      return { prev };
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(["notify", "settings"], ctx.prev);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["notify", "settings"] });
+      // The Activity feed is filtered server-side by this setting — refresh it.
+      queryClient.invalidateQueries({ queryKey: ["notify", "activity"] });
+    },
+  });
 
   const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ["cineplex", "movies", filter],
@@ -228,7 +253,7 @@ export function MoviesTab() {
             <Switch
               id="hide-intl"
               checked={hideInternational}
-              onCheckedChange={setHideInternational}
+              onCheckedChange={(v) => setHideInternational.mutate(v)}
             />
           </div>
 

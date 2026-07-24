@@ -3,7 +3,7 @@
 // (new movies, advance tickets released, now-playing transitions, date changes).
 // Detected changes feed the Activity tab and can trigger Telegram alerts.
 import type { ActivityEvent, Movie } from "../types";
-import { fetchMovies } from "./cineplex";
+import { fetchMovies, isEnglishLanguage } from "./cineplex";
 import {
   getSettings,
   getCatalog,
@@ -57,7 +57,12 @@ export async function scanCatalog(notify: boolean): Promise<ActivityEvent[]> {
     if (baseline) continue; // first run — record snapshot only
 
     const before = prev[key];
-    const base = { filmId: m.id, filmName: m.name, posterUrl: m.mediumPosterImageUrl ?? null };
+    const base = {
+      filmId: m.id,
+      filmName: m.name,
+      posterUrl: m.mediumPosterImageUrl ?? null,
+      language: m.language ?? null,
+    };
 
     if (!before) {
       events.push({
@@ -127,8 +132,11 @@ export async function scanCatalog(notify: boolean): Promise<ActivityEvent[]> {
 
   // Telegram alert for newly-released advance tickets (opt-in).
   if (notify && !baseline) {
-    const { notifyAdvanceTickets, telegramBotToken, telegramChatId } = getSettings();
-    const advEvents = events.filter((e) => e.type === "advance_tickets");
+    const { notifyAdvanceTickets, telegramBotToken, telegramChatId, hideInternational } =
+      getSettings();
+    let advEvents = events.filter((e) => e.type === "advance_tickets");
+    // Respect the "hide international" setting — don't alert for non-English films.
+    if (hideInternational) advEvents = advEvents.filter((e) => isEnglishLanguage(e.language));
     if (notifyAdvanceTickets && telegramBotToken && telegramChatId && advEvents.length > 0) {
       try {
         const lines = advEvents

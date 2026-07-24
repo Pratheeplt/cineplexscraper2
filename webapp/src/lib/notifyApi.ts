@@ -17,6 +17,7 @@ export interface NotifySettings {
   catalogIntervalMinutes: number;
   notifyAdvanceTickets: boolean;
   notifyFavoriteDates: boolean;
+  hideInternational: boolean;
   hasBotToken: boolean;
   telegramChatId: string;
   telegramConnected: boolean;
@@ -33,6 +34,7 @@ export type NotifySettingsPatch = Partial<
     | "catalogIntervalMinutes"
     | "notifyAdvanceTickets"
     | "notifyFavoriteDates"
+    | "hideInternational"
     | "telegramChatId"
   > & {
     telegramBotToken: string;

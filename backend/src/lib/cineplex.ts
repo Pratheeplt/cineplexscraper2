@@ -4,6 +4,11 @@ import { MovieSchema, ShowSessionSchema, type Movie, type ShowSession } from "..
 
 const CINEPLEX_KEY = "dcdac5601d864addbc2675a2e96cb1f8"; // public key from cineplex.com website JS
 
+/** A film is "international" when its spoken language isn't English. */
+export function isEnglishLanguage(language?: string | null): boolean {
+  return (language ?? "").trim().toLowerCase() === "english";
+}
+
 export async function cineplex(path: string): Promise<unknown> {
   const res = await fetch(`https://apis.cineplex.com/prod/cpx/theatrical/api/v1/${path}`, {
     headers: {
