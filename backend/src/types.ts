@@ -160,7 +160,25 @@ export const SettingsSchema = z.object({
 });
 export type Settings = z.infer<typeof SettingsSchema>;
 
-export const UpdateSettingsSchema = SettingsSchema.partial();
+// A patch for settings: every field optional AND with NO defaults. This is
+// intentionally NOT `SettingsSchema.partial()` — the base fields carry
+// `.default(...)`, and Zod still applies those defaults for keys that are
+// absent, so `.partial()` would expand `{ hideInternational: true }` into a
+// FULL settings object with every other field reset to its default. Merging
+// that patch would silently wipe sibling settings (turning off the Telegram
+// alert toggles and clearing telegramChatId). Declaring plain optional fields
+// with no defaults keeps a partial patch truly partial.
+export const UpdateSettingsSchema = z.object({
+  enabled: z.boolean().optional(),
+  intervalMinutes: z.number().optional(),
+  telegramBotToken: z.string().optional(),
+  telegramChatId: z.string().optional(),
+  catalogEnabled: z.boolean().optional(),
+  catalogIntervalMinutes: z.number().optional(),
+  notifyAdvanceTickets: z.boolean().optional(),
+  notifyFavoriteDates: z.boolean().optional(),
+  hideInternational: z.boolean().optional(),
+});
 export type UpdateSettings = z.infer<typeof UpdateSettingsSchema>;
 
 // ---------------------------------------------------------------------------

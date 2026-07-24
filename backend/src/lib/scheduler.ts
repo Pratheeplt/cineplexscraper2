@@ -1,7 +1,7 @@
 // Background scheduler: periodically checks each watch for NEW showtimes on its
 // target date and fires Telegram notifications the moment one appears.
 import type { ActivityEvent, HistoryEntry, ShowSession, Watch } from "../types";
-import { fetchFilmShowtimesByDate } from "./cineplex";
+import { fetchFilmShowtimesByDate, isEnglishLanguage } from "./cineplex";
 import {
   getSettings,
   getWatches,
@@ -14,6 +14,7 @@ import {
   getFavSeenDates,
   setFavSeenDates,
   addActivity,
+  getFilmLanguage,
 } from "./store";
 import { sendTelegram } from "./telegram";
 import { scanCatalog } from "./catalog";
@@ -77,7 +78,19 @@ export async function checkWatch(watchId: string, notify: boolean): Promise<Show
 
   if (fresh.length === 0) return [];
 
-  if (notify) {
+  // Respect "hide international": never send a Telegram alert (or record history)
+  // for a film we know is non-English. The snapshot + seen set above are still
+  // updated, so turning the setting off later won't dump a burst of old showtimes.
+  const { hideInternational } = getSettings();
+  const lang = getFilmLanguage(watch.filmId);
+  const suppressed = hideInternational && lang != null && !isEnglishLanguage(lang);
+  if (suppressed) {
+    console.log(
+      `[scheduler] hideInternational on — skipping alert for "${watch.filmName}" (${lang})`
+    );
+  }
+
+  if (notify && !suppressed) {
     const now = new Date().toISOString();
     const entries: HistoryEntry[] = fresh.map((s) => ({
       id: newId("h"),
@@ -139,6 +152,10 @@ export async function checkFavoriteDates(notify: boolean): Promise<number> {
   const { movies, theatres } = getFavorites();
   if (movies.length === 0 || theatres.length === 0) return 0;
 
+  // When "hide international" is on, non-English favourites produce no Activity
+  // event and no Telegram alert (their seen-dates baseline still updates below).
+  const { hideInternational } = getSettings();
+
   let totalNew = 0;
   // Grouped fresh dates (with their showtimes) for the Telegram summary.
   const groups: {
@@ -147,6 +164,8 @@ export async function checkFavoriteDates(notify: boolean): Promise<number> {
   }[] = [];
 
   for (const movie of movies) {
+    const lang = getFilmLanguage(movie.filmId);
+    const suppressed = hideInternational && lang != null && !isEnglishLanguage(lang);
     for (const theatre of theatres) {
       const key = `${movie.filmId}_${theatre.theatreId}`;
       let byDate: Map<string, ShowSession[]>;
@@ -175,6 +194,8 @@ export async function checkFavoriteDates(notify: boolean): Promise<number> {
       const fresh = dates.filter((d) => !seen.includes(d));
       setFavSeenDates(key, dates);
       if (fresh.length === 0) continue;
+      // hideInternational on: baseline stays fresh, but no alert/activity for it.
+      if (suppressed) continue;
 
       totalNew += fresh.length;
       const freshWithSessions = fresh.map((d) => ({ date: d, sessions: byDate.get(d) ?? [] }));

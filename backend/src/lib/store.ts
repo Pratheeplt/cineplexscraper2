@@ -33,6 +33,9 @@ export interface CatalogEntry {
   hasAdvanceTickets: boolean;
   releaseDate: string | null;
   isNowPlaying: boolean;
+  // Spoken language ("English", "Punjabi", …) so notifications can respect the
+  // "hide international" setting. May be absent on entries from older scans.
+  language: string | null;
 }
 
 // Default Telegram bot supplied by the user (t.me/cineplexscraperbot).
@@ -260,6 +263,12 @@ export function setCatalog(catalog: Record<string, CatalogEntry>): void {
   syncFromDisk();
   state.catalog = catalog;
   persist();
+}
+
+/** Language of a film from the last catalog scan, or null if unknown. */
+export function getFilmLanguage(filmId: number): string | null {
+  syncFromDisk();
+  return state.catalog[String(filmId)]?.language ?? null;
 }
 
 // ---- Activity feed --------------------------------------------------------

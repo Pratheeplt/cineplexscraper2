@@ -88,6 +88,11 @@ export function MoviesTab() {
     onError: (_e, _v, ctx) => {
       if (ctx?.prev) queryClient.setQueryData(["notify", "settings"], ctx.prev);
     },
+    // Write the server's authoritative settings back so the switch always
+    // reflects the persisted value and can never appear to revert.
+    onSuccess: (data) => {
+      queryClient.setQueryData(["notify", "settings"], data);
+    },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["notify", "settings"] });
       // The Activity feed is filtered server-side by this setting — refresh it.

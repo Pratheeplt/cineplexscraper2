@@ -53,6 +53,7 @@ function toEntry(m: Movie): CatalogEntry {
     hasAdvanceTickets: m.hasAdvanceTickets,
     releaseDate: m.releaseDate ?? null,
     isNowPlaying: m.isNowPlaying,
+    language: m.language ?? null,
   };
 }
 
