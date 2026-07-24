@@ -56,14 +56,6 @@ export async function fetchTheatreFilmIds(locationId: number): Promise<number[]>
   return [...ids];
 }
 
-/** Bookable dates (YYYY-MM-DD) for a film at a theatre. */
-export async function fetchBookableDates(filmId: number, locationId: number): Promise<string[]> {
-  const raw = (await cineplex(`dates/bookable?filmId=${filmId}&locationId=${locationId}`)) as unknown;
-  const list = Array.isArray(raw) ? raw.filter((d): d is string => typeof d === "string") : [];
-  // Normalize "2026-07-22T00:00:00" -> "2026-07-22"
-  return list.map((d) => d.slice(0, 10));
-}
-
 type RawSession = {
   vistaSessionId?: number;
   showStartDateTime?: string;
@@ -80,6 +72,77 @@ type RawMovie = { id?: number; experiences?: RawExperience[] };
 type RawDate = { startDate?: string; movies?: RawMovie[] };
 type RawTheatreShowtimes = { theatreId?: number; dates?: RawDate[] };
 
+/** Normalize one raw "experience" grouping's sessions into ShowSession[]. */
+function parseExperience(exp: RawExperience): ShowSession[] {
+  const types = exp.experienceTypes ?? [];
+  const out: ShowSession[] = [];
+  for (const s of exp.sessions ?? []) {
+    if (typeof s.vistaSessionId !== "number" || !s.showStartDateTime) continue;
+    out.push(
+      ShowSessionSchema.parse({
+        sessionId: s.vistaSessionId,
+        startDateTime: s.showStartDateTime,
+        auditorium: s.auditorium ?? null,
+        seatsRemaining: s.seatsRemaining ?? null,
+        isSoldOut: s.isSoldOut ?? false,
+        experienceTypes: types,
+        ticketingUrl: s.ticketingUrl ?? s.deeplinkUrl ?? null,
+        seatMapUrl: s.seatMapUrl ?? null,
+        isReservedSeating: s.isReservedSeating ?? false,
+      })
+    );
+  }
+  return out;
+}
+
+/**
+ * All showtimes for a film at a theatre, grouped by date (YYYY-MM-DD), in a
+ * SINGLE upstream call. Only dates that ACTUALLY have >=1 session are included.
+ *
+ * This is the reliable "is the movie really playable on this date" signal.
+ * Cineplex's /dates/bookable endpoint lists far-future placeholder dates for
+ * films that aren't really out yet (with no showtimes behind them), which is
+ * what caused false "new date" alerts — so we key everything off real sessions.
+ */
+export async function fetchFilmShowtimesByDate(
+  filmId: number,
+  locationId: number
+): Promise<Map<string, ShowSession[]>> {
+  const raw = (await cineplex(
+    `showtimes?language=en&filmId=${filmId}&locationId=${locationId}`
+  )) as RawTheatreShowtimes[];
+
+  const byDate = new Map<string, ShowSession[]>();
+  for (const theatre of Array.isArray(raw) ? raw : []) {
+    for (const d of theatre.dates ?? []) {
+      const date = (d.startDate ?? "").slice(0, 10);
+      if (!date) continue;
+      for (const movie of d.movies ?? []) {
+        if (movie.id !== filmId) continue;
+        for (const exp of movie.experiences ?? []) {
+          const parsed = parseExperience(exp);
+          if (parsed.length === 0) continue;
+          const arr = byDate.get(date) ?? [];
+          arr.push(...parsed);
+          byDate.set(date, arr);
+        }
+      }
+    }
+  }
+
+  // Sort each date's sessions chronologically.
+  for (const arr of byDate.values()) {
+    arr.sort((a, b) => a.startDateTime.localeCompare(b.startDateTime));
+  }
+  return byDate;
+}
+
+/** Sorted list of dates (YYYY-MM-DD) that have real showtimes for a film. */
+export async function fetchShowtimeDates(filmId: number, locationId: number): Promise<string[]> {
+  const byDate = await fetchFilmShowtimesByDate(filmId, locationId);
+  return [...byDate.keys()].sort();
+}
+
 /**
  * Flattened, normalized showtimes for a single film + theatre + date.
  * Each session carries its experience format(s) (IMAX / UltraAVX / Recliner…).
@@ -89,40 +152,6 @@ export async function fetchShowtimes(
   locationId: number,
   date: string // YYYY-MM-DD
 ): Promise<ShowSession[]> {
-  const raw = (await cineplex(
-    `showtimes?language=en&filmId=${filmId}&locationId=${locationId}&date=${date}`
-  )) as RawTheatreShowtimes[];
-
-  const sessions: ShowSession[] = [];
-  for (const theatre of Array.isArray(raw) ? raw : []) {
-    for (const d of theatre.dates ?? []) {
-      // Only keep the requested date (API sometimes returns neighbours)
-      if (d.startDate && d.startDate.slice(0, 10) !== date) continue;
-      for (const movie of d.movies ?? []) {
-        if (movie.id !== filmId) continue;
-        for (const exp of movie.experiences ?? []) {
-          const types = exp.experienceTypes ?? [];
-          for (const s of exp.sessions ?? []) {
-            if (typeof s.vistaSessionId !== "number" || !s.showStartDateTime) continue;
-            sessions.push(
-              ShowSessionSchema.parse({
-                sessionId: s.vistaSessionId,
-                startDateTime: s.showStartDateTime,
-                auditorium: s.auditorium ?? null,
-                seatsRemaining: s.seatsRemaining ?? null,
-                isSoldOut: s.isSoldOut ?? false,
-                experienceTypes: types,
-                ticketingUrl: s.ticketingUrl ?? s.deeplinkUrl ?? null,
-                seatMapUrl: s.seatMapUrl ?? null,
-                isReservedSeating: s.isReservedSeating ?? false,
-              })
-            );
-          }
-        }
-      }
-    }
-  }
-
-  sessions.sort((a, b) => a.startDateTime.localeCompare(b.startDateTime));
-  return sessions;
+  const byDate = await fetchFilmShowtimesByDate(filmId, locationId);
+  return byDate.get(date) ?? [];
 }

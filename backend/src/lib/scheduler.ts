@@ -1,7 +1,7 @@
 // Background scheduler: periodically checks each watch for NEW showtimes on its
 // target date and fires Telegram notifications the moment one appears.
 import type { ActivityEvent, HistoryEntry, ShowSession, Watch } from "../types";
-import { fetchBookableDates, fetchShowtimes } from "./cineplex";
+import { fetchFilmShowtimesByDate } from "./cineplex";
 import {
   getSettings,
   getWatches,
@@ -57,15 +57,12 @@ export async function checkWatch(watchId: string, notify: boolean): Promise<Show
   const watch = getWatch(watchId);
   if (!watch) return [];
 
-  // Refresh bookable dates (for the dashboard) — non-fatal if it fails.
-  let bookableDates = watch.bookableDates;
-  try {
-    bookableDates = await fetchBookableDates(watch.filmId, watch.locationId);
-  } catch (e) {
-    console.error(`[scheduler] bookable dates failed for watch ${watchId}:`, (e as Error).message);
-  }
-
-  const sessions = await fetchShowtimes(watch.filmId, watch.locationId, watch.date);
+  // One upstream call gives us every date that has real showtimes (the dashboard
+  // "bookable dates") plus the sessions for the target date. Dates with no
+  // showtimes are omitted, so far-future placeholder dates never show up.
+  const byDate = await fetchFilmShowtimesByDate(watch.filmId, watch.locationId);
+  const bookableDates = [...byDate.keys()].sort();
+  const sessions = byDate.get(watch.date) ?? [];
 
   const seen = getSeen(watchId);
   const fresh = sessions.filter((s) => !seen.has(s.sessionId));
@@ -143,22 +140,30 @@ export async function checkFavoriteDates(notify: boolean): Promise<number> {
   if (movies.length === 0 || theatres.length === 0) return 0;
 
   let totalNew = 0;
-  // Grouped fresh dates for the Telegram summary: [movie+theatre header, dates]
-  const groups: { header: string; dates: string[] }[] = [];
+  // Grouped fresh dates (with their showtimes) for the Telegram summary.
+  const groups: {
+    header: string;
+    dates: { date: string; sessions: ShowSession[] }[];
+  }[] = [];
 
   for (const movie of movies) {
     for (const theatre of theatres) {
       const key = `${movie.filmId}_${theatre.theatreId}`;
-      let dates: string[];
+      let byDate: Map<string, ShowSession[]>;
       try {
-        dates = await fetchBookableDates(movie.filmId, theatre.theatreId);
+        byDate = await fetchFilmShowtimesByDate(movie.filmId, theatre.theatreId);
       } catch (e) {
         console.error(
-          `[favorites] bookable dates failed for ${movie.filmName} @ ${theatre.theatreName}:`,
+          `[favorites] showtimes failed for ${movie.filmName} @ ${theatre.theatreName}:`,
           (e as Error).message
         );
         continue;
       }
+
+      // Only dates that actually have showtimes count as "released/bookable".
+      // This is the fix: a movie with far-future placeholder dates but no
+      // showtimes behind them no longer triggers a "new date" alert.
+      const dates = [...byDate.keys()].sort();
 
       const seen = getFavSeenDates(key);
       if (seen === undefined) {
@@ -172,25 +177,28 @@ export async function checkFavoriteDates(notify: boolean): Promise<number> {
       if (fresh.length === 0) continue;
 
       totalNew += fresh.length;
+      const freshWithSessions = fresh.map((d) => ({ date: d, sessions: byDate.get(d) ?? [] }));
       groups.push({
         header: `🎬 *${movie.filmName}* @ ${theatre.theatreName}`,
-        dates: fresh,
+        dates: freshWithSessions,
       });
 
       const now = new Date().toISOString();
-      const events: ActivityEvent[] = fresh.map((d) => ({
+      const events: ActivityEvent[] = freshWithSessions.map(({ date, sessions }) => ({
         id: newId("f"),
         type: "favorite_date" as const,
         filmId: movie.filmId,
         filmName: movie.filmName,
         posterUrl: movie.posterUrl ?? null,
-        detail: `New date at ${theatre.theatreName}: ${fmtDate(d)}`,
+        detail: `${sessions.length} showtime${sessions.length === 1 ? "" : "s"} at ${theatre.theatreName} · ${fmtDate(date)}`,
+        date,
+        sessions,
         detectedAt: now,
       }));
       addActivity(events);
 
       console.log(
-        `[favorites] ${fresh.length} NEW date(s) for "${movie.filmName}" @ ${theatre.theatreName}`
+        `[favorites] ${fresh.length} NEW date(s) with showtimes for "${movie.filmName}" @ ${theatre.theatreName}`
       );
     }
   }
@@ -200,9 +208,19 @@ export async function checkFavoriteDates(notify: boolean): Promise<number> {
     if (notifyFavoriteDates && telegramBotToken && telegramChatId) {
       try {
         const body = groups
-          .map((g) => `${g.header}\n${g.dates.map((d) => `• ${fmtDate(d)}`).join("\n")}`)
+          .map((g) => {
+            const dateBlocks = g.dates
+              .map(({ date, sessions }) => {
+                const lines = sessions.slice(0, 10).map(sessionLine);
+                const extra = sessions.length - 10;
+                if (extra > 0) lines.push(`  …and ${extra} more`);
+                return `📅 ${fmtDate(date)}\n${lines.join("\n")}`;
+              })
+              .join("\n");
+            return `${g.header}\n${dateBlocks}`;
+          })
           .join("\n\n");
-        await sendTelegram(`📅 *New dates for your favourite movies:*\n\n${body}`);
+        await sendTelegram(`🎟 *New showtimes for your favourite movies:*\n\n${body}`);
         console.log("[favorites] Telegram alert sent");
       } catch (e) {
         console.error("[favorites] Telegram send failed:", (e as Error).message);

@@ -169,6 +169,10 @@ export const ActivityEventSchema = z.object({
   posterUrl: z.string().nullable().optional(),
   detail: z.string(), // human-readable summary, e.g. "Advance tickets now on sale"
   releaseDate: z.string().nullable().optional(),
+  // For "favorite_date" events: the specific bookable date that opened plus the
+  // showtimes behind it (time, format, seats) so the UI can show real details.
+  date: z.string().nullable().optional(),
+  sessions: z.array(ShowSessionSchema).optional(),
   detectedAt: z.string(),
 });
 export type ActivityEvent = z.infer<typeof ActivityEventSchema>;

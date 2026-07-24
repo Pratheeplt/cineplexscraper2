@@ -9,12 +9,14 @@ import {
   RefreshCw,
   Film,
 } from "lucide-react";
-import type { ActivityEvent } from "@/lib/notifyApi";
+import { Armchair, Clock } from "lucide-react";
+import type { ActivityEvent, ShowSession } from "@/lib/notifyApi";
 import { notifyApi } from "@/lib/notifyApi";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { formatTime, experienceClass } from "./notify/format";
 import { ListSkeleton, ErrorState, EmptyState } from "./StateViews";
 
 // Visual style + label per activity type.
@@ -61,12 +63,44 @@ function timeAgo(iso: string): string {
   return `${days}d ago`;
 }
 
+function ShowtimeRow({ session }: { session: ShowSession }) {
+  return (
+    <div className="flex items-center gap-2 rounded-lg border border-border/60 bg-background/50 px-2.5 py-1.5 text-sm">
+      <span className="inline-flex items-center gap-1 font-semibold text-foreground">
+        <Clock className="h-3.5 w-3.5 text-primary" />
+        {formatTime(session.startDateTime)}
+      </span>
+      {session.experienceTypes.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-1">
+          {session.experienceTypes.map((t) => (
+            <Badge key={t} variant="outline" className={cn("border px-1.5 py-0 text-[10px]", experienceClass(t))}>
+              {t}
+            </Badge>
+          ))}
+        </div>
+      ) : null}
+      <span className="ml-auto shrink-0 text-xs text-muted-foreground">
+        {session.isSoldOut ? (
+          <span className="font-medium text-destructive">Sold out</span>
+        ) : typeof session.seatsRemaining === "number" ? (
+          <span className="inline-flex items-center gap-1">
+            <Armchair className="h-3 w-3" />
+            {session.seatsRemaining} seats
+          </span>
+        ) : null}
+      </span>
+    </div>
+  );
+}
+
 function ActivityRow({ event }: { event: ActivityEvent }) {
   const meta = TYPE_META[event.type] ?? FALLBACK_META;
   const Icon = meta.icon;
+  const sessions = event.sessions ?? [];
+  const hasSessions = sessions.length > 0;
 
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-border bg-card p-3 transition-colors hover:border-primary/40">
+    <div className="flex items-start gap-3 rounded-xl border border-border bg-card p-3 transition-colors hover:border-primary/40">
       <div className="h-14 w-10 shrink-0 overflow-hidden rounded-md bg-secondary">
         {event.posterUrl ? (
           <img src={event.posterUrl} alt={event.filmName} loading="lazy" className="h-full w-full object-cover" />
@@ -88,7 +122,15 @@ function ActivityRow({ event }: { event: ActivityEvent }) {
         <p className="mt-1 truncate font-semibold text-foreground" title={event.filmName}>
           {event.filmName}
         </p>
-        <p className="truncate text-sm text-muted-foreground">{event.detail}</p>
+        <p className={cn("text-sm text-muted-foreground", hasSessions ? "" : "truncate")}>{event.detail}</p>
+
+        {hasSessions ? (
+          <div className="mt-2 flex flex-col gap-1.5">
+            {sessions.map((s) => (
+              <ShowtimeRow key={s.sessionId} session={s} />
+            ))}
+          </div>
+        ) : null}
       </div>
     </div>
   );

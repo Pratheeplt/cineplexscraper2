@@ -3,7 +3,7 @@ import { TheatreSchema, type Theatre } from "../types";
 import {
   cineplex,
   fetchMovies,
-  fetchBookableDates,
+  fetchShowtimeDates,
   fetchShowtimes,
   fetchTheatreFilmIds,
 } from "../lib/cineplex";
@@ -107,6 +107,8 @@ cineplexRouter.get("/theatre-films", async (c) => {
 });
 
 // GET /api/cineplex/dates?filmId=..&locationId=..
+// Only dates that actually have showtimes — a movie with placeholder future
+// dates but no shows yet returns nothing (it isn't really bookable).
 cineplexRouter.get("/dates", async (c) => {
   const filmId = c.req.query("filmId");
   const locationId = c.req.query("locationId");
@@ -124,7 +126,7 @@ cineplexRouter.get("/dates", async (c) => {
   }
 
   try {
-    const dates = await fetchBookableDates(Number(filmId), Number(locationId));
+    const dates = await fetchShowtimeDates(Number(filmId), Number(locationId));
     return c.json({ data: dates });
   } catch (e) {
     return c.json(upstreamError(e), 502);
